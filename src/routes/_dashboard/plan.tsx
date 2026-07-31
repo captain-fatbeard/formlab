@@ -793,19 +793,19 @@ function PlanPage() {
   const autoPhase: PlanPhase = detectPhase(phaseTsb, phaseAtl)
   const activePhase: PlanPhase = phaseSetting === 'auto' ? autoPhase : phaseSetting
 
-  // First time entering this week: persist the auto-detected phase so the
-  // plan is locked in from the start. The user can still toggle Recovery/Build
-  // to override; the DB row is the source of truth from here on.
+  // First time entering this week: persist 'paused' so every new week starts
+  // paused until the user explicitly resumes it. Resuming re-locks the week to
+  // the auto-detected phase; the DB row is the source of truth from here on.
   useEffect(() => {
     if (!overridesLoaded) return
     if (!athlete || !isSupabaseConfigured()) return
     if (fitnessSeries.length === 0) return
     const wsKey = format(weekStart, 'yyyy-MM-dd')
     if (wsKey in weekPhaseOverrides) return
-    upsertPlanWeekPhase(athlete.id, wsKey, autoPhase)
-    setWeekPhaseOverrides((prev) => ({ ...prev, [wsKey]: autoPhase }))
-    setPhaseSetting(autoPhase)
-  }, [overridesLoaded, athlete, weekStart, weekPhaseOverrides, autoPhase, fitnessSeries.length])
+    upsertPlanWeekPhase(athlete.id, wsKey, 'paused')
+    setWeekPhaseOverrides((prev) => ({ ...prev, [wsKey]: 'paused' }))
+    setPhaseSetting('paused')
+  }, [overridesLoaded, athlete, weekStart, weekPhaseOverrides, fitnessSeries.length])
 
   const isPaused = activePhase === 'paused'
 
