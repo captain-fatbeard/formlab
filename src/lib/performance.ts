@@ -1051,18 +1051,47 @@ function calcEffortScore(power: number, durationHours: number): number {
   return Math.round(power * Math.sqrt(durationHours) / 10)
 }
 
-// Ride Score: effort adjusted for terrain difficulty
-// Terrain multiplier: flat=1.0, 1% avg gradient=1.5, 2%=2.0, 3%+=2.5+
-function calcRideScore(power: number, durationHours: number, distanceKm: number, elevationGain: number): number {
-  if (!power || !durationHours) return 0
-  const avgGradient = distanceKm > 0 ? (elevationGain / (distanceKm * 1000)) * 100 : 0
-  const terrainMultiplier = 1 + avgGradient * 0.5
-  return Math.round(power * Math.sqrt(durationHours) * terrainMultiplier / 10)
+// Ride Score: TSS-like training load, best available signal first.
+// 1. intervals.icu training load (suffer_score) — HR-based, computed from the
+//    full HR stream, present on every ride since the July 2026 switch.
+// 2. hrTSS estimated from avg HR: hours × (HRR fraction / 0.85)² × 100,
+//    assuming LTHR ≈ 85% of heart-rate reserve. Calibrated against the
+//    intervals.icu loads above (within ~5% on rides with both).
+// 3. Power TSS from (estimated) watts: hours × (power/FTP)² × 100. Weakest
+//    signal — all this athlete's watts are estimates — so it's last.
+function calcRideScore(
+  ride: StravaActivity,
+  power: number,
+  durationHours: number,
+  ftp: number,
+  maxHR: number,
+  restingHR: number,
+): number {
+  if (ride.suffer_score && ride.suffer_score > 0) return Math.round(ride.suffer_score)
+
+  const avgHR = ride.average_heartrate || 0
+  if (avgHR > restingHR && maxHR > restingHR) {
+    const hrrFrac = (avgHR - restingHR) / (maxHR - restingHR)
+    return Math.round(100 * durationHours * (hrrFrac / 0.85) ** 2)
+  }
+
+  if (power && ftp > 0) {
+    return Math.round(100 * durationHours * (power / ftp) ** 2)
+  }
+  return 0
 }
 
-export function calculateActivityScores(activities: StravaActivity[], ftp: number): ActivityScore[] {
+export function calculateActivityScores(
+  activities: StravaActivity[],
+  ftp: number,
+  maxHR = 0,
+  restingHR = 0,
+): ActivityScore[] {
   const rides = activities.filter(
-    (a) => (a.type === 'Ride' || a.type === 'VirtualRide') && a.average_watts && a.moving_time >= 600
+    (a) =>
+      (a.type === 'Ride' || a.type === 'VirtualRide') &&
+      a.moving_time >= 600 &&
+      (a.suffer_score || a.average_heartrate || a.average_watts)
   )
 
   return rides.map((ride) => {
@@ -1079,7 +1108,7 @@ export function calculateActivityScores(activities: StravaActivity[], ftp: numbe
       name: ride.name,
       date: ride.start_date_local,
       dateKey: `${ride.start_date_local}_${ride.id}`,
-      rideScore: calcRideScore(power, durationHours, distanceKm, elevationGain),
+      rideScore: calcRideScore(ride, power, durationHours, ftp, maxHR, restingHR),
       difficultyScore: calcDifficultyScore(distanceKm, elevationGain),
       effortScore: calcEffortScore(power, durationHours),
       distanceKm: Math.round(distanceKm * 10) / 10,

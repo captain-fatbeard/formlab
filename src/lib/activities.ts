@@ -18,12 +18,14 @@ export function isRun(a: StravaActivity): boolean {
   return a.type === 'Run'
 }
 
-/** Get a human-readable score label from a numeric ride score */
+/** Get a human-readable score label from a numeric ride score.
+ * Scores are TSS-like training load, so bands follow TSS semantics:
+ * ~100 ≈ one hour at threshold. */
 export function getScoreLabel(score: number): string {
-  if (score >= 100) return 'Epic'
-  if (score >= 80) return 'Hard'
-  if (score >= 50) return 'Solid'
-  if (score >= 30) return 'Moderate'
+  if (score >= 300) return 'Epic'
+  if (score >= 200) return 'Hard'
+  if (score >= 120) return 'Solid'
+  if (score >= 60) return 'Moderate'
   return 'Easy'
 }
 

@@ -86,7 +86,7 @@ function aggregateGroup(group: ActivityGroup, activities: StravaActivity[]): Mer
 }
 
 export function ActivityList({ activities }: ActivityListProps) {
-  const { trainingActivityIds, toggleActivityCategory, activityGroups, createGroup, deleteGroup, updateGroupName } = useDashboard()
+  const { trainingActivityIds, toggleActivityCategory, activityGroups, createGroup, deleteGroup, updateGroupName, maxHR, restingHR } = useDashboard()
   const navigate = useNavigate()
 
   const [groupMode, setGroupMode] = useState(false)
@@ -133,11 +133,11 @@ export function ActivityList({ activities }: ActivityListProps) {
   const scoreMap = useMemo(() => {
     const rides = activities.filter(isRide)
     const ftp = estimateFTP(rides) || 0
-    const scores = calculateActivityScores(activities, ftp)
+    const scores = calculateActivityScores(activities, ftp, maxHR, restingHR)
     const map = new Map<number, number>()
     for (const s of scores) map.set(s.activityId, s.rideScore)
     return map
-  }, [activities])
+  }, [activities, maxHR, restingHR])
 
   const matchesFilters = useCallback(
     (a: StravaActivity): boolean => {
