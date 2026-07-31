@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.24.0](https://github.com/captain-fatbeard/strava-performance-tracker/compare/v1.23.0...v1.24.0) (2026-07-31)
+
+
+### Features
+
+* **activities:** add filters to the activity list ([1bd9a69](https://github.com/captain-fatbeard/strava-performance-tracker/commit/1bd9a69466889eb5a7a28692e02d5aa2295a8c7f))
+* **activities:** score rides by training load instead of power formula ([dc904bd](https://github.com/captain-fatbeard/strava-performance-tracker/commit/dc904bd6d78e81616b459c8d9e96095f4172bfa2))
+* **infra:** add daily Supabase keepalive cron ([b979c8b](https://github.com/captain-fatbeard/strava-performance-tracker/commit/b979c8b83ef3b35288c4cf978809a0cf4af0122c))
+* **plan:** add option to pause the training plan for a week ([4e86079](https://github.com/captain-fatbeard/strava-performance-tracker/commit/4e8607922065c71b42cbe25d596205a3f99d8608))
+* **plan:** default new weeks to paused ([ddd8e78](https://github.com/captain-fatbeard/strava-performance-tracker/commit/ddd8e7849fa2dcf54d9b3d3587e008fc272083dc))
+* **power:** estimate power for rides without a power meter ([c6ba76b](https://github.com/captain-fatbeard/strava-performance-tracker/commit/c6ba76b7a746efc8b83f4f9adac3cb099b915dc5))
+* **sync:** switch data source from Strava to intervals.icu ([fa92eb2](https://github.com/captain-fatbeard/strava-performance-tracker/commit/fa92eb2b4d261b414b7e65b1dae66d5e799a3184))
+
+
+### Bug Fixes
+
+* **sync:** prevent and self-heal duplicate activities from failed cache reads ([892d988](https://github.com/captain-fatbeard/strava-performance-tracker/commit/892d98817561616575578805808e2b903c5f6c1e))
+
 ## [1.23.0](https://github.com/captain-fatbeard/strava-performance-tracker/compare/v1.22.1...v1.23.0) (2026-05-28)
 
 
