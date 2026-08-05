@@ -847,6 +847,18 @@ function DashboardLayout() {
             </Link>
           </div>
           <div className="p-3 border-t border-border-subtle flex flex-col gap-1.5">
+            <Link
+              to="/docs"
+              activeProps={{ className: 'active' }}
+              onClick={() => setMobileNavOpen(false)}
+              className="flex items-center gap-2.5 py-2.5 px-3 text-text-secondary no-underline text-sm font-medium rounded-[var(--radius-md)] transition-all duration-150 hover:bg-bg-tertiary hover:text-text-primary"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              </svg>
+              Docs
+            </Link>
             <button
               className="flex items-center gap-2.5 py-2.5 px-3 text-text-secondary text-sm font-medium rounded-[var(--radius-md)] cursor-pointer transition-all duration-150 w-full hover:bg-bg-tertiary hover:text-text-primary"
               onClick={() => { setMobileNavOpen(false); setSidebarOpen(true) }}
@@ -1036,6 +1048,24 @@ function DashboardLayout() {
                   Fetches your full intervals.icu history and downloads detailed data (splits, route, power curves) for new activities.
                 </p>
               )}
+            </div>
+
+            <div className="mt-8">
+              <h3 className="text-xs text-text-muted uppercase tracking-wider font-semibold mb-4 pb-2 border-b border-border-subtle">Reference</h3>
+              <Link
+                to="/docs"
+                onClick={() => setSidebarOpen(false)}
+                className="bg-bg-tertiary border border-border text-text-secondary py-2.5 px-4 rounded-[var(--radius-sm)] cursor-pointer text-sm font-medium transition-all duration-150 hover:bg-bg-elevated hover:text-text-primary hover:border-accent w-full flex items-center justify-center gap-2 no-underline"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+                Docs — how the data flows
+              </Link>
+              <p className="text-[0.7rem] text-text-muted mt-2 leading-relaxed">
+                Sync pipeline, what&apos;s cached in Supabase, and what each page computes.
+              </p>
             </div>
           </div>
 
