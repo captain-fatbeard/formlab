@@ -1,6 +1,6 @@
 # FormLab
 
-A personal fitness analytics dashboard that connects to Strava and provides deep performance insights for cycling and running.
+A personal fitness analytics dashboard that connects to intervals.icu and provides deep performance insights for cycling and running.
 
 ## Features
 
@@ -20,7 +20,7 @@ A personal fitness analytics dashboard that connects to Strava and provides deep
 - [Leaflet](https://leafletjs.com) — activity maps
 - [Tailwind CSS v4](https://tailwindcss.com) — styling
 - [Supabase](https://supabase.com) — database and storage
-- [Strava API](https://developers.strava.com) — activity data
+- [intervals.icu API](https://intervals.icu) — activity data
 - [Vite](https://vite.dev) — build tooling
 - [Vercel](https://vercel.com) — deployment
 
@@ -30,7 +30,7 @@ A personal fitness analytics dashboard that connects to Strava and provides deep
 
 - Node.js 20+
 - [pnpm](https://pnpm.io)
-- A [Strava API application](https://www.strava.com/settings/api)
+- An [intervals.icu](https://intervals.icu) account with an API key
 - A [Supabase](https://supabase.com) project
 
 ### Setup
@@ -55,9 +55,9 @@ A personal fitness analytics dashboard that connects to Strava and provides deep
    ```
 
    ```
-   STRAVA_CLIENT_ID=your_client_id
-   STRAVA_CLIENT_SECRET=your_client_secret
-   APP_URL=http://localhost:3000
+   INTERVALS_API_KEY=your_api_key
+   APP_PASSPHRASE=your_passphrase
+   APP_ATHLETE_ID=your_athlete_id
    ```
 
    All required variables are documented in `.env.example`.
@@ -74,12 +74,12 @@ A personal fitness analytics dashboard that connects to Strava and provides deep
    pnpm dev
    ```
 
-### Strava API Setup
+### intervals.icu API Setup
 
-1. Go to [Strava API Settings](https://www.strava.com/settings/api)
-2. Create an application (or use an existing one)
-3. Set the **Authorization Callback Domain** to `localhost` (for local dev) or your production domain
-4. Copy the Client ID and Client Secret into your `.env` file
+1. Go to intervals.icu → **Settings** → **Developer Settings**
+2. Copy your API key into `INTERVALS_API_KEY`
+3. Pick any `APP_PASSPHRASE` — it's the only login the app has, and it gates every server function that touches the API key
+4. Set `APP_ATHLETE_ID` to the athlete id all Supabase rows are keyed by (the original Strava athlete id, so existing settings, weight entries and cached activities stay attached)
 
 ## Database Schema
 
@@ -89,7 +89,7 @@ The app uses four Supabase tables:
 |-------|---------|
 | `user_settings` | Per-athlete settings (birthday, gender, time range, activity type) |
 | `weight_entries` | Weight history for tracking and VO2max estimation |
-| `activities` | Cached Strava activities with full detail JSON |
+| `activities` | Cached activities with full detail JSON |
 | `excluded_activities` | Activities excluded from performance calculations |
 
 Migrations are in `supabase/migrations/`.
@@ -145,7 +145,7 @@ The app is configured for [Vercel](https://vercel.com) with the Nitro server pre
 
 [![Powered by Strava](https://developers.strava.com/images/logos/strava_powered_by_light.svg)](https://www.strava.com)
 
-This app uses the [Strava API](https://developers.strava.com) but is not endorsed or certified by Strava.
+Activity history predating the intervals.icu cutover was imported from the [Strava API](https://developers.strava.com), and the app's internal activity shape still follows it. This app is not endorsed or certified by Strava.
 
 ## License
 
