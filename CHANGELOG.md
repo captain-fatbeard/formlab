@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.25.0](https://github.com/captain-fatbeard/strava-performance-tracker/compare/v1.24.0...v1.25.0) (2026-08-05)
+
+
+### Features
+
+* **docs:** add data flow docs page linked from settings ([7c4ef40](https://github.com/captain-fatbeard/strava-performance-tracker/commit/7c4ef400c5e20600e7a8d7524c803ccb7d3e7162))
+
 ## [1.24.0](https://github.com/captain-fatbeard/strava-performance-tracker/compare/v1.23.0...v1.24.0) (2026-07-31)
 
 
