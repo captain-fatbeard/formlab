@@ -154,6 +154,32 @@ export function mapIntervalsActivity(a: IntervalsActivity): StravaActivity {
 // same workout recorded by two sources (Strava cache vs intervals.icu backfill).
 const DUPLICATE_WINDOW_MS = 3 * 60 * 1000
 
+// The two sources don't always agree on an activity's type: indoor rides from
+// 2020 come back from intervals.icu as 'Ride' but were cached from Strava as
+// 'VirtualRide'. Comparing raw types lets that disagreement defeat the
+// duplicate check entirely, so the same workout lands twice. Collapse types
+// into families first — distinct enough that a ride is never mistaken for a
+// run, loose enough that a naming difference between sources can't slip past.
+const TYPE_FAMILIES: Record<string, string> = {
+  Ride: 'ride',
+  VirtualRide: 'ride',
+  EBikeRide: 'ride',
+  GravelRide: 'ride',
+  MountainBikeRide: 'ride',
+  Handcycle: 'ride',
+  Run: 'run',
+  VirtualRun: 'run',
+  TrailRun: 'run',
+  Walk: 'walk',
+  Hike: 'walk',
+  Swim: 'swim',
+  VirtualSwim: 'swim',
+}
+
+export function activityTypeFamily(type: string): string {
+  return TYPE_FAMILIES[type] ?? type
+}
+
 export function dedupeAgainstExisting(
   fetched: StravaActivity[],
   existing: StravaActivity[]
@@ -161,14 +187,15 @@ export function dedupeAgainstExisting(
   const existingIds = new Set(existing.map((a) => a.id))
   const existingByType = new Map<string, number[]>()
   for (const a of existing) {
-    const starts = existingByType.get(a.type) ?? []
+    const family = activityTypeFamily(a.type)
+    const starts = existingByType.get(family) ?? []
     starts.push(new Date(a.start_date).getTime())
-    existingByType.set(a.type, starts)
+    existingByType.set(family, starts)
   }
 
   return fetched.filter((a) => {
     if (existingIds.has(a.id)) return true // same id upserts in place
-    const starts = existingByType.get(a.type)
+    const starts = existingByType.get(activityTypeFamily(a.type))
     if (!starts) return true
     const start = new Date(a.start_date).getTime()
     return !starts.some((s) => Math.abs(s - start) < DUPLICATE_WINDOW_MS)

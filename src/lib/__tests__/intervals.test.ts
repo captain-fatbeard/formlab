@@ -6,6 +6,7 @@ import {
   fromIntervalsApiId,
   mapIntervalsActivity,
   dedupeAgainstExisting,
+  activityTypeFamily,
   findIntervalsDuplicateIds,
   encodePolyline,
   computeSplitsFromStreams,
@@ -154,6 +155,41 @@ describe('dedupeAgainstExisting', () => {
       ),
     ]
     expect(dedupeAgainstExisting(fetched, existing)).toHaveLength(1)
+  })
+
+  it('drops a duplicate the two sources disagree about the type of', () => {
+    // Old Zwift sessions were cached from Strava as VirtualRide but come back
+    // from intervals.icu as plain Ride — a full sync used to insert both.
+    const existing = [makeStravaActivity({ type: 'VirtualRide', start_date: '2020-04-22T15:21:36Z' })]
+    const fetched = [
+      mapIntervalsActivity(
+        makeIntervalsActivity({ id: 'i171152527', type: 'Ride', start_date: '2020-04-22T15:21:36Z' })
+      ),
+    ]
+    expect(dedupeAgainstExisting(fetched, existing)).toHaveLength(0)
+  })
+
+  it('keeps a ride that only shares a start time with a run', () => {
+    const existing = [makeStravaActivity({ type: 'Run', start_date: '2020-04-22T15:21:36Z' })]
+    const fetched = [
+      mapIntervalsActivity(
+        makeIntervalsActivity({ id: 'i171152527', type: 'VirtualRide', start_date: '2020-04-22T15:21:36Z' })
+      ),
+    ]
+    expect(dedupeAgainstExisting(fetched, existing)).toHaveLength(1)
+  })
+})
+
+describe('activityTypeFamily', () => {
+  it('groups the variants the two sources use interchangeably', () => {
+    expect(activityTypeFamily('VirtualRide')).toBe(activityTypeFamily('Ride'))
+    expect(activityTypeFamily('TrailRun')).toBe(activityTypeFamily('Run'))
+    expect(activityTypeFamily('Hike')).toBe(activityTypeFamily('Walk'))
+  })
+
+  it('keeps unrelated types apart and passes unknown ones through', () => {
+    expect(activityTypeFamily('Ride')).not.toBe(activityTypeFamily('Run'))
+    expect(activityTypeFamily('WeightTraining')).toBe('WeightTraining')
   })
 })
 
