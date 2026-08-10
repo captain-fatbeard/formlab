@@ -162,6 +162,19 @@ function computeStats(merged: StravaActivity[], weight: number) {
   }
 }
 
+// How stale the activity list may get before returning to the tab triggers a
+// re-sync. Short enough that a ride uploaded during the day shows up, long
+// enough that flicking between tabs doesn't hammer the intervals.icu API.
+const RESYNC_AFTER_MS = 10 * 60 * 1000
+
+// The server rejects a passphrase that no longer matches APP_PASSPHRASE with
+// this message. Worth separating from network failures: retrying never fixes
+// it, and because a sync failure falls back to cached data, an unnoticed stale
+// passphrase leaves the app quietly serving week-old activities forever.
+function isStalePassphrase(err: unknown): boolean {
+  return err instanceof Error && /invalid passphrase/i.test(err.message)
+}
+
 function DashboardLayout() {
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(true)
@@ -172,6 +185,7 @@ function DashboardLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isSyncingAll, setIsSyncingAll] = useState(false)
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null)
+  const [syncMessage, setSyncMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
 
   const [timeRange, setTimeRange] = useState<TimeRange>(DEFAULT_SETTINGS.timeRange)
   const [activityType, setActivityType] = useState<ActivityType>(DEFAULT_SETTINGS.activityType)
@@ -225,6 +239,11 @@ function DashboardLayout() {
   // permanently duplicates every activity that exists under a Strava id.
   const cacheHealthyRef = useRef(false)
 
+  // When the last sync with intervals.icu completed. Used to throttle the
+  // re-sync that runs whenever the tab becomes visible again.
+  const lastSyncAtRef = useRef(0)
+  const syncInFlightRef = useRef(false)
+
   const applyActivities = useCallback((merged: StravaActivity[]) => {
     activitiesRef.current = merged
     setActivities(merged)
@@ -233,47 +252,67 @@ function DashboardLayout() {
   // Reusable sync callback. Cached activities (including the pre-intervals.icu
   // Strava history) are always preserved; fetched activities that duplicate an
   // existing one from the other source are dropped before merge and upsert.
+  // Reports how many activities the sync added that the app had never seen
+  // before, and whether they made it into Supabase — a merge that only lands in
+  // React state looks identical to a real sync until the next page load.
   const syncActivities = useCallback(
-    async (fetchAll: boolean) => {
-      const passphrase = await storage.auth.getPassphrase()
-      const storedAthlete = await storage.auth.getAthlete()
-      if (!passphrase || !storedAthlete) return
+    async (fetchAll: boolean): Promise<{ added: number; persisted: boolean }> => {
+      // Two syncs racing would both dedupe against the same pre-merge snapshot
+      // of `activitiesRef` and write conflicting merges back.
+      if (syncInFlightRef.current) return { added: 0, persisted: true }
+      syncInFlightRef.current = true
 
-      const afterDate = fetchAll
-        ? undefined
-        : (() => {
-            const cutoff = new Date()
-            cutoff.setDate(cutoff.getDate() - 90)
-            return cutoff.toISOString()
-          })()
+      try {
+        const passphrase = await storage.auth.getPassphrase()
+        const storedAthlete = await storage.auth.getAthlete()
+        if (!passphrase || !storedAthlete) return { added: 0, persisted: true }
 
-      const fetchedActivities = await fetchIntervalsActivities({
-        data: { passphrase, afterDate },
-      })
+        const afterDate = fetchAll
+          ? undefined
+          : (() => {
+              const cutoff = new Date()
+              cutoff.setDate(cutoff.getDate() - 90)
+              return cutoff.toISOString()
+            })()
 
-      const existing = activitiesRef.current
-      const byId = new Map<number, StravaActivity>()
-      for (const a of existing) byId.set(a.id, a)
+        const fetchedActivities = await fetchIntervalsActivities({
+          data: { passphrase, afterDate },
+        })
 
-      // Preserve locally-enriched fields (estimated power patched onto rides
-      // without a power meter) that a re-fetched copy from intervals.icu
-      // wouldn't carry — otherwise every sync wipes the estimates.
-      const fresh = dedupeAgainstExisting(fetchedActivities, existing).map((a) => {
-        const prev = byId.get(a.id)
-        return prev?.average_watts && !a.average_watts
-          ? { ...a, average_watts: prev.average_watts }
-          : a
-      })
+        const existing = activitiesRef.current
+        const byId = new Map<number, StravaActivity>()
+        for (const a of existing) byId.set(a.id, a)
 
-      for (const a of fresh) byId.set(a.id, a)
-      applyActivities(
-        Array.from(byId.values()).sort(
-          (a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+        // Preserve locally-enriched fields (estimated power patched onto rides
+        // without a power meter) that a re-fetched copy from intervals.icu
+        // wouldn't carry — otherwise every sync wipes the estimates.
+        const fresh = dedupeAgainstExisting(fetchedActivities, existing).map((a) => {
+          const prev = byId.get(a.id)
+          return prev?.average_watts && !a.average_watts
+            ? { ...a, average_watts: prev.average_watts }
+            : a
+        })
+
+        const addedCount = fresh.filter((a) => !byId.has(a.id)).length
+
+        for (const a of fresh) byId.set(a.id, a)
+        applyActivities(
+          Array.from(byId.values()).sort(
+            (a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+          )
         )
-      )
 
-      if (isSupabaseConfigured() && cacheHealthyRef.current && fresh.length > 0) {
-        upsertActivities(storedAthlete.id, fresh)
+        // Awaited: the detail backfill immediately queries Supabase for rows
+        // without details_json, so these have to be committed before it runs.
+        let persisted = true
+        if (isSupabaseConfigured() && cacheHealthyRef.current && fresh.length > 0) {
+          persisted = await upsertActivities(storedAthlete.id, fresh)
+        }
+
+        lastSyncAtRef.current = Date.now()
+        return { added: addedCount, persisted }
+      } finally {
+        syncInFlightRef.current = false
       }
     },
     [applyActivities]
@@ -284,17 +323,18 @@ function DashboardLayout() {
   // the API access ended. Rides without a power meter get physics-estimated
   // watts patched onto their summary so scores, TSS and FTP inputs keep
   // working like they did with Strava's estimates.
+  // Resolves to the number of activities it fetched details for.
   const backfillDetails = useCallback(
-    async (athleteId: number, withProgress: boolean) => {
-      if (!isSupabaseConfigured()) return
+    async (athleteId: number, withProgress: boolean): Promise<number> => {
+      if (!isSupabaseConfigured()) return 0
 
       const passphrase = await storage.auth.getPassphrase()
-      if (!passphrase) return
+      if (!passphrase) return 0
 
       const uncachedIds = (await fetchActivityIdsWithoutDetails(athleteId)).filter(
         isIntervalsActivityId
       )
-      if (uncachedIds.length === 0) return
+      if (uncachedIds.length === 0) return 0
 
       if (withProgress) setSyncProgress({ current: 0, total: uncachedIds.length })
 
@@ -335,6 +375,8 @@ function DashboardLayout() {
           await new Promise((r) => setTimeout(r, 300))
         }
       }
+
+      return uncachedIds.length
     },
     [applyActivities]
   )
@@ -342,20 +384,50 @@ function DashboardLayout() {
   const handleSyncAll = useCallback(async () => {
     setIsSyncingAll(true)
     setSyncProgress(null)
+    setSyncMessage(null)
     try {
       // Phase 1: Sync activity list
-      await syncActivities(true)
+      const { added, persisted } = await syncActivities(true)
+
+      // A merge that never reached Supabase looks like a successful sync until
+      // the next page load throws it away, so say so rather than claiming ok.
+      if (!persisted) {
+        setSyncMessage({
+          tone: 'error',
+          text: `Fetched ${added} new ${added === 1 ? 'activity' : 'activities'} but could not save them. See the browser console.`,
+        })
+        return
+      }
 
       const storedAthlete = await storage.auth.getAthlete()
       if (!storedAthlete) return
 
-      // Wait for upsert to complete before querying for uncached
-      await new Promise((r) => setTimeout(r, 1000))
-
       // Phase 2: Fetch details for activities without cached details
-      await backfillDetails(storedAthlete.id, true)
+      const detailed = await backfillDetails(storedAthlete.id, true)
+
+      // A full sync usually has nothing to do, and finishing silently in a
+      // second is indistinguishable from the button being broken. Always say
+      // what happened.
+      const parts = [
+        added > 0 && `${added} new ${added === 1 ? 'activity' : 'activities'}`,
+        detailed > 0 && `details for ${detailed} ${detailed === 1 ? 'ride' : 'rides'}`,
+      ].filter(Boolean)
+
+      setSyncMessage({
+        tone: 'ok',
+        text: parts.length > 0 ? `Synced ${parts.join(' · ')}.` : 'Already up to date.',
+      })
     } catch (err) {
       console.error('Sync all failed:', err)
+      if (isStalePassphrase(err)) {
+        setSyncMessage({
+          tone: 'error',
+          text: 'Your saved passphrase is no longer valid. Log out and log in again.',
+        })
+      } else {
+        const detail = err instanceof Error ? err.message : String(err)
+        setSyncMessage({ tone: 'error', text: `Sync failed: ${detail}` })
+      }
     } finally {
       setIsSyncingAll(false)
       setSyncProgress(null)
@@ -449,17 +521,21 @@ function DashboardLayout() {
       }
       settingsLoaded.current = true
 
-      // Background sync with intervals.icu — never clear auth on sync failure
+      // Background sync with intervals.icu — a transient failure must never
+      // clear auth, but a rejected passphrase has to surface (see below).
       try {
         await syncActivities(false)
-        // Backfill details (and estimated power) for any new activities in
-        // the background; the 1.5s delay lets the activity upsert land first.
-        new Promise((r) => setTimeout(r, 1500))
-          .then(() => backfillDetails(storedAthlete.id, false))
-          .catch((err) => console.warn('Details backfill failed:', err))
+        // Backfill details (and estimated power) for any new activities in the
+        // background — the sync above has already committed them.
+        backfillDetails(storedAthlete.id, false).catch((err) =>
+          console.warn('Details backfill failed:', err)
+        )
       } catch (err) {
         console.warn('intervals.icu sync failed, using cached data:', err)
-        if (!hasCachedData) {
+        if (isStalePassphrase(err)) {
+          await storage.auth.clear()
+          setError('Your saved passphrase is no longer valid. Please log in again.')
+        } else if (!hasCachedData) {
           setError('Failed to sync with intervals.icu. Please try again later.')
         }
       } finally {
@@ -469,6 +545,35 @@ function DashboardLayout() {
 
     init()
   }, [navigate])
+
+  // `init` runs once per page load, so an installed PWA or a tab left open for
+  // days would keep showing the cache and never pick up new rides. Re-sync when
+  // the app comes back to the foreground, throttled by RESYNC_AFTER_MS.
+  useEffect(() => {
+    if (!athlete) return
+
+    const resync = () => {
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastSyncAtRef.current < RESYNC_AFTER_MS) return
+
+      syncActivities(false)
+        .then(() => backfillDetails(athlete.id, false))
+        .catch(async (err) => {
+          console.warn('Foreground re-sync failed:', err)
+          if (isStalePassphrase(err)) {
+            await storage.auth.clear()
+            setError('Your saved passphrase is no longer valid. Please log in again.')
+          }
+        })
+    }
+
+    document.addEventListener('visibilitychange', resync)
+    window.addEventListener('focus', resync)
+    return () => {
+      document.removeEventListener('visibilitychange', resync)
+      window.removeEventListener('focus', resync)
+    }
+  }, [athlete, syncActivities, backfillDetails])
 
   const handleLogout = async () => {
     await storage.auth.clear()
@@ -1039,11 +1144,20 @@ function DashboardLayout() {
                     />
                   </div>
                   <p className="text-[0.7rem] text-text-muted mt-1">
-                    {syncProgress.current} of {syncProgress.total} rides — ~10s per activity to respect rate limits
+                    {syncProgress.current} of {syncProgress.total} rides — downloading splits, route and power data
                   </p>
                 </div>
               )}
-              {!syncProgress && (
+              {!syncProgress && syncMessage && (
+                <p
+                  className={`text-[0.7rem] mt-2 leading-relaxed ${
+                    syncMessage.tone === 'error' ? 'text-red-400' : 'text-accent'
+                  }`}
+                >
+                  {syncMessage.text}
+                </p>
+              )}
+              {!syncProgress && !syncMessage && (
                 <p className="text-[0.7rem] text-text-muted mt-2 leading-relaxed">
                   Fetches your full intervals.icu history and downloads detailed data (splits, route, power curves) for new activities.
                 </p>
