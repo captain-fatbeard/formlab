@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.26.0](https://github.com/captain-fatbeard/formlab/compare/v1.25.0...v1.26.0) (2026-08-10)
+
+
+### Features
+
+* **sync:** re-sync on foreground and report what a sync did ([856ce6f](https://github.com/captain-fatbeard/formlab/commit/856ce6f9f1bad8ce49b51045c901a2785dbee9ac))
+
+
+### Bug Fixes
+
+* **sync:** dedupe activities when the sources disagree on type ([85962b5](https://github.com/captain-fatbeard/formlab/commit/85962b5aa5f8b6357b410ff3295b14b1aac0ba31))
+
+
+### Documentation
+
+* replace unused Strava env vars with intervals.icu config ([f435e7d](https://github.com/captain-fatbeard/formlab/commit/f435e7dfb582d3d9d3509522cc54eda922dae4df))
+
 ## [1.25.0](https://github.com/captain-fatbeard/strava-performance-tracker/compare/v1.24.0...v1.25.0) (2026-08-05)
 
 
