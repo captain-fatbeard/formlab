@@ -10,6 +10,7 @@ import {
   type CalendarMetric,
 } from '~/lib/activity-calendar'
 import { sectionCard } from '~/lib/styles'
+import { pageRange } from '~/components/Pagination'
 
 interface ActivityCalendarProps {
   activities: StravaActivity[]
@@ -49,6 +50,68 @@ function formatHours(seconds: number): string {
   const m = Math.round((seconds % 3600) / 60)
   if (h === 0) return `${m}m`
   return `${h}h ${m}m`
+}
+
+/**
+ * Year selector in the shape of the app's pagination: newest and oldest are
+ * always reachable, the current year sits between its neighbours, and anything
+ * further away collapses into a gap. A rider with ten seasons shouldn't get ten
+ * buttons.
+ */
+function YearPager({
+  years, selected, onSelect,
+}: {
+  years: string[]
+  selected: string
+  onSelect: (year: string) => void
+}) {
+  if (years.length <= 1) return null
+
+  // years is newest-first, so index 0 is "page 1".
+  const current = Math.max(1, years.indexOf(selected) + 1)
+  const btnBase =
+    'inline-flex items-center justify-center min-w-8 h-7 px-2 text-xs font-medium rounded-[var(--radius-sm)] border transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40'
+  const btnIdle =
+    'bg-bg-tertiary border-border-subtle text-text-secondary hover:bg-bg-elevated hover:text-text-primary hover:border-border'
+  const btnActive = 'bg-accent/20 border-accent/40 text-accent'
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <button
+        type="button"
+        className={`${btnBase} ${btnIdle}`}
+        onClick={() => onSelect(years[current - 2])}
+        disabled={current <= 1}
+        aria-label="Later year"
+      >
+        ‹
+      </button>
+      {pageRange(current, years.length).map((p, i) =>
+        p === 'gap' ? (
+          <span key={`gap-${i}`} className="text-xs text-text-muted px-0.5">…</span>
+        ) : (
+          <button
+            key={years[p - 1]}
+            type="button"
+            className={`${btnBase} ${p === current ? btnActive : btnIdle}`}
+            onClick={() => onSelect(years[p - 1])}
+            aria-current={p === current ? 'true' : undefined}
+          >
+            {years[p - 1]}
+          </button>
+        )
+      )}
+      <button
+        type="button"
+        className={`${btnBase} ${btnIdle}`}
+        onClick={() => onSelect(years[current])}
+        disabled={current >= years.length}
+        aria-label="Earlier year"
+      >
+        ›
+      </button>
+    </div>
+  )
 }
 
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -121,33 +184,32 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
             ))}
           </div>
 
-          <div className="flex gap-1 bg-bg-tertiary rounded-[var(--radius-sm)] p-0.5 overflow-x-auto">
-            {years.map((y) => (
-              <button
-                key={y}
-                onClick={() => setSelectedYear(y)}
-                aria-pressed={year === y}
-                className={`text-[0.7rem] font-semibold px-2.5 py-1 rounded-[var(--radius-sm)] transition-colors shrink-0 ${
-                  year === y ? 'bg-accent text-bg-primary' : 'text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                {y}
-              </button>
-            ))}
-          </div>
+          <YearPager years={years} selected={year} onSelect={setSelectedYear} />
         </div>
       </div>
 
-      {/* Grid. Scrolls horizontally on narrow screens rather than squashing the
-          cells below a usable hit target. */}
+      {/* Grid. Columns are 1fr so the cells stretch to whatever width the page
+          gives them — a year is a fixed 53 columns, so there's no reason to
+          leave half the card empty. `minmax(0.5rem, 1fr)` keeps a hit target
+          worth aiming at on narrow screens, and the container scrolls rather
+          than squashing below that. */}
       <div className="overflow-x-auto pb-1">
-        <div className="inline-flex flex-col gap-1 min-w-full">
+        <div
+          className="flex flex-col gap-1 min-w-[560px]"
+          // Cap the cell size so a first, part-finished season — which has far
+          // fewer than 53 columns — doesn't stretch into giant blocks. A full
+          // year never reaches the cap and fills the page.
+          style={{ maxWidth: `calc(34px + ${calendar.weeks.length} * 2.25rem)` }}
+        >
           {/* Month axis */}
-          <div className="flex gap-[3px] ml-[34px]">
+          <div
+            className="grid gap-[3px] ml-[34px]"
+            style={{ gridTemplateColumns: `repeat(${calendar.weeks.length}, minmax(0.5rem, 1fr))` }}
+          >
             {calendar.weeks.map((_, i) => {
               const label = calendar.monthLabels.find((m) => m.weekIndex === i)
               return (
-                <div key={i} className="w-[11px] shrink-0">
+                <div key={i} className="min-w-0">
                   {label && (
                     <span className="text-[0.6rem] text-text-muted whitespace-nowrap">{label.label}</span>
                   )}
@@ -157,30 +219,34 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
           </div>
 
           <div className="flex gap-[3px]">
-            {/* Weekday axis — every other row, so the labels don't crowd */}
-            <div className="flex flex-col gap-[3px] w-[31px] shrink-0">
+            {/* Weekday axis — every other row, so the labels don't crowd.
+                Rows share the cells' aspect-ratio height via the same grid. */}
+            <div className="grid grid-rows-7 gap-[3px] w-[31px] shrink-0">
               {DAY_LABELS.map((d, i) => (
-                <div key={d} className="h-[11px] flex items-center">
+                <div key={d} className="flex items-center">
                   {i % 2 === 1 && <span className="text-[0.6rem] text-text-muted leading-none">{d}</span>}
                 </div>
               ))}
             </div>
 
-            {calendar.weeks.map((week, wi) => (
-              <div key={wi} className="flex flex-col gap-[3px]">
-                {week.map((day, di) => {
-                  if (!day) return <div key={di} className="size-[11px]" />
+            <div
+              className="grid grid-rows-7 grid-flow-col gap-[3px] flex-1 min-w-0"
+              style={{ gridTemplateColumns: `repeat(${calendar.weeks.length}, minmax(0.5rem, 1fr))` }}
+            >
+              {calendar.weeks.map((week, wi) =>
+                week.map((day, di) => {
+                  if (!day) return <div key={`${wi}-${di}`} className="aspect-square" />
                   const isHovered = hovered?.date === day.date
                   return (
                     <button
-                      key={di}
+                      key={`${wi}-${di}`}
                       type="button"
                       onMouseEnter={() => setHovered(day)}
                       onMouseLeave={() => setHovered(null)}
                       onFocus={() => setHovered(day)}
                       onBlur={() => setHovered(null)}
                       aria-label={`${day.date}: ${day.count} ${day.count === 1 ? 'activity' : 'activities'}, ${formatHours(day.movingTime)}, ${Math.round(day.load)} load`}
-                      className="size-[11px] rounded-[2px] transition-transform hover:scale-125 focus:scale-125 focus:outline-none"
+                      className="aspect-square w-full rounded-[3px] transition-transform hover:scale-110 focus:scale-110 focus:outline-none"
                       style={{
                         backgroundColor: LEVEL_FILL[day.level],
                         // 2px surface ring on the hovered mark, per mark specs
@@ -188,16 +254,16 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
                       }}
                     />
                   )
-                })}
-              </div>
-            ))}
+                })
+              )}
+            </div>
           </div>
 
           {/* Legend */}
           <div className="flex items-center gap-1.5 ml-[34px] mt-1">
             <span className="text-[0.6rem] text-text-muted mr-1">Less</span>
             {LEVEL_FILL.map((fill, i) => (
-              <div key={i} className="size-[11px] rounded-[2px]" style={{ backgroundColor: fill }} />
+              <div key={i} className="size-3 rounded-[3px]" style={{ backgroundColor: fill }} />
             ))}
             <span className="text-[0.6rem] text-text-muted ml-1">More</span>
           </div>

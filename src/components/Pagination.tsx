@@ -5,7 +5,10 @@ interface PaginationProps {
   onPageChange: (page: number) => void
 }
 
-function pageRange(current: number, total: number): (number | 'gap')[] {
+/** Page numbers to show: always the first and last, the current one and its
+ * neighbours, and a gap marker where the run is broken. Shared with the
+ * calendar's year pager so both elide the same way. */
+export function pageRange(current: number, total: number): (number | 'gap')[] {
   if (total <= 7) {
     return Array.from({ length: total }, (_, i) => i + 1)
   }
