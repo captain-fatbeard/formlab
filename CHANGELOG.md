@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.27.0](https://github.com/captain-fatbeard/formlab/compare/v1.26.0...v1.27.0) (2026-08-14)
+
+
+### Features
+
+* **overview:** add a training calendar heatmap with period totals ([7f38d85](https://github.com/captain-fatbeard/formlab/commit/7f38d858ba0f923a832785676e8065f8fd182e1e))
+* **overview:** draw the full calendar year, dimming days still to come ([5163418](https://github.com/captain-fatbeard/formlab/commit/51634182e575b7f7c069b0fbabbe1c5ac91d9c0f))
+* **overview:** page the calendar years and stretch the grid to full width ([d8c078e](https://github.com/captain-fatbeard/formlab/commit/d8c078ed3573850ef72617c11aeb4da2d50a4cc5))
+
+
+### Bug Fixes
+
+* **activities:** one rule for combining activities into a summary ([f260000](https://github.com/captain-fatbeard/formlab/commit/f260000e14f3602c339e7e2cf7d036d57698a78e))
+* **fitness:** one entry point for the curve, and stop gating it on power ([6ace2bf](https://github.com/captain-fatbeard/formlab/commit/6ace2bf523edbdca5111dc7b6707b9830af0463f))
+* **metrics:** stop display filters from moving training load ([ddd3cfa](https://github.com/captain-fatbeard/formlab/commit/ddd3cfa4a8cb5c7864515f23425cb92036b7a53b))
+* **overview:** colour the calendar by how big a day was, not how it ranked ([2ebfb10](https://github.com/captain-fatbeard/formlab/commit/2ebfb107f119a9eb312d5c72f0245c76dcfb6f3c))
+* **overview:** separate an epic day from a merely good one in the calendar ([d628267](https://github.com/captain-fatbeard/formlab/commit/d62826795fb7d9c0935fbe3140d9f8b0054baaad))
+* **sync:** make reconciling against a partial cache impossible ([fcb430f](https://github.com/captain-fatbeard/formlab/commit/fcb430f75fb2129b1f15c6b22b546c4c96d30431))
+* **tss:** compute training load once for every surface ([7c6facf](https://github.com/captain-fatbeard/formlab/commit/7c6facff9d23011861a8bcfce5e826927a7e34b9))
+
+
+### Refactoring
+
+* **performance:** delete the unreachable third of the module ([ded29f8](https://github.com/captain-fatbeard/formlab/commit/ded29f8929e6a59d7afaf83ec843355e864769b2))
+* **plan:** lift the training-plan rulebook out of the route ([6165bf0](https://github.com/captain-fatbeard/formlab/commit/6165bf0177392a6c60618ff4024320f8e89258d1))
+
 ## [1.26.0](https://github.com/captain-fatbeard/formlab/compare/v1.25.0...v1.26.0) (2026-08-10)
 
 
