@@ -3,6 +3,8 @@ import type { StravaActivity } from '~/lib/strava'
 import {
   calculateTSS,
   classifySport,
+  isRide,
+  isRun,
   deriveThresholds,
   gapFactor,
   gradeAdjustedSpeed,
@@ -57,6 +59,39 @@ describe('classifySport', () => {
     expect(classifySport(makeActivity({ type: 'Walk', sport_type: 'Walk' }))).toBe('other')
     expect(classifySport(makeActivity({ type: 'Swim', sport_type: 'Swim' }))).toBe('other')
     expect(classifySport(makeActivity({ type: 'WeightTraining', sport_type: 'WeightTraining' }))).toBe('other')
+  })
+})
+
+describe('isRide / isRun', () => {
+  // These used to be a hand-written `type === 'Ride' || type === 'VirtualRide'`
+  // in fourteen places, so a GravelRide moved the CTL curve but had no score,
+  // no FTP contribution and no personal record.
+  it('accepts every cycling type classifySport knows', () => {
+    for (const sport_type of [
+      'Ride', 'VirtualRide', 'GravelRide', 'MountainBikeRide',
+      'EBikeRide', 'EMountainBikeRide', 'Velomobile', 'Handcycle',
+    ]) {
+      expect(isRide(makeActivity({ type: 'Ride', sport_type }))).toBe(true)
+    }
+  })
+
+  it('accepts every running type classifySport knows', () => {
+    for (const sport_type of ['Run', 'TrailRun', 'VirtualRun']) {
+      expect(isRun(makeActivity({ type: 'Run', sport_type }))).toBe(true)
+    }
+  })
+
+  it('agrees with classifySport on every input', () => {
+    for (const sport_type of ['GravelRide', 'TrailRun', 'Swim', 'Walk', 'VirtualRide']) {
+      const a = makeActivity({ type: 'Ride', sport_type })
+      expect(isRide(a)).toBe(classifySport(a) === 'cycling')
+      expect(isRun(a)).toBe(classifySport(a) === 'running')
+    }
+  })
+
+  it('does not confuse the two', () => {
+    expect(isRun(makeActivity({ type: 'Ride', sport_type: 'GravelRide' }))).toBe(false)
+    expect(isRide(makeActivity({ type: 'Run', sport_type: 'TrailRun' }))).toBe(false)
   })
 })
 

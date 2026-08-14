@@ -3,6 +3,7 @@ import { type StravaActivity, type StravaAthlete } from './strava'
 import { type TimeRange, type ActivityType, type Gender } from './storage/supabase-client'
 import type { WeightEntry, ActivityGroup } from './storage/supabase-client'
 import type { TssThresholds, ThresholdSources } from './tss'
+import type { AthleteProfile } from './athlete-profile'
 
 export type { TimeRange, ActivityType, Gender }
 export type { WeightEntry, ActivityGroup }
@@ -65,6 +66,9 @@ export interface DashboardContextType {
   deleteWeightEntry: (id: string) => Promise<boolean>
   tssThresholds: TssThresholds
   tssThresholdSources: ThresholdSources
+  /** FTP, its history and the thresholds — derived from the complete history,
+   * so it does not move when the time-range or type filter changes. */
+  profile: AthleteProfile
 }
 
 export const DashboardContext = createContext<DashboardContextType | null>(null)

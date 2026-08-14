@@ -9,8 +9,9 @@ import {
 import { fetchIntervalsActivities, fetchIntervalsActivityDetails } from '~/lib/server-functions'
 import { dedupeAgainstExisting, isIntervalsActivityId, findIntervalsDuplicateIds } from '~/lib/intervals'
 import { type StravaActivity, type StravaAthlete, metersToKm } from '~/lib/strava'
-import { estimateFTP, calculateMaxHR, calculateRestingHR, calculateAge } from '~/lib/performance'
-import { deriveThresholds } from '~/lib/tss'
+import { calculateMaxHR, calculateRestingHR, calculateAge } from '~/lib/performance'
+import { isRide, isRun } from '~/lib/tss'
+import { deriveAthleteProfile, type AthleteProfile } from '~/lib/athlete-profile'
 import {
   DashboardContext,
   type DashboardContextType,
@@ -125,9 +126,12 @@ function mergeWithGroups(
   )
 }
 
-function computeStats(merged: StravaActivity[], weight: number) {
-  const rides = merged.filter((a) => a.type === 'Ride' || a.type === 'VirtualRide')
-  const runs = merged.filter((a) => a.type === 'Run')
+// Totals for whatever slice of activities a page is showing. FTP and w/kg are
+// athlete properties, not properties of the slice, so they come in from the
+// profile rather than being re-estimated from the filtered set.
+function computeStats(merged: StravaActivity[], profile: AthleteProfile) {
+  const rides = merged.filter(isRide)
+  const runs = merged.filter(isRun)
 
   const totalDistance = merged.reduce((sum, a) => sum + a.distance, 0)
   const totalElevation = merged.reduce((sum, a) => sum + a.total_elevation_gain, 0)
@@ -145,9 +149,6 @@ function computeStats(merged: StravaActivity[], weight: number) {
       ? merged.reduce((sum, a) => sum + (a.average_heartrate || 0), 0) / withHR.length
       : 0
 
-  const ftp = estimateFTP(rides) || 0
-  const wattsPerKilo = ftp > 0 && weight > 0 ? ftp / weight : 0
-
   return {
     totalActivities: merged.length,
     totalDistance: metersToKm(totalDistance),
@@ -157,8 +158,8 @@ function computeStats(merged: StravaActivity[], weight: number) {
     avgHR: Math.round(avgHR),
     rides: rides.length,
     runs: runs.length,
-    ftp,
-    wattsPerKilo,
+    ftp: profile.ftp,
+    wattsPerKilo: profile.wattsPerKilo,
   }
 }
 
@@ -668,9 +669,8 @@ function DashboardLayout() {
   const activityTypeFiltered = useMemo(() => {
     if (activityType === 'all') return activities
     return activities.filter((a) => {
-      if (activityType === 'Ride') {
-        return a.type === 'Ride' || a.type === 'VirtualRide'
-      }
+      if (activityType === 'Ride') return isRide(a)
+      if (activityType === 'Run') return isRun(a)
       return a.type === activityType || a.sport_type === activityType
     })
   }, [activities, activityType])
@@ -730,19 +730,22 @@ function DashboardLayout() {
       .sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())
   }, [activityTypeFiltered, activityGroups, trainingActivityIds])
 
+  // Derived from the complete history, never from a filtered view — the time
+  // range and activity-type dropdowns must not be able to move FTP, and through
+  // it every TSS, CTL and ATL in the app. See deriveAthleteProfile.
+  const profile = useMemo(
+    () => deriveAthleteProfile(lifetimeMergedActivities, { weight, maxHR, restingHR }),
+    [lifetimeMergedActivities, weight, maxHR, restingHR]
+  )
+
   const stats = useMemo(
-    () => computeStats(mergedActivities, weight),
-    [mergedActivities, weight]
+    () => computeStats(mergedActivities, profile),
+    [mergedActivities, profile]
   )
 
   const lifetimeStats = useMemo(
-    () => computeStats(lifetimeMergedActivities, weight),
-    [lifetimeMergedActivities, weight]
-  )
-
-  const tssThresholdResult = useMemo(
-    () => deriveThresholds(mergedActivities, { ftp: stats.ftp, maxHR, restingHR }),
-    [mergedActivities, stats.ftp, maxHR, restingHR]
+    () => computeStats(lifetimeMergedActivities, profile),
+    [lifetimeMergedActivities, profile]
   )
 
   if (isLoading) {
@@ -798,8 +801,9 @@ function DashboardLayout() {
     weightEntries,
     addWeightEntry: handleAddWeightEntry,
     deleteWeightEntry: handleDeleteWeightEntry,
-    tssThresholds: tssThresholdResult.thresholds,
-    tssThresholdSources: tssThresholdResult.sources,
+    tssThresholds: profile.thresholds,
+    tssThresholdSources: profile.sources,
+    profile,
   }
 
   const initials = `${athlete.firstname?.[0] || ''}${athlete.lastname?.[0] || ''}`

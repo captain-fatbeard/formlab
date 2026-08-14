@@ -5,6 +5,7 @@ import { EfficiencyChart } from '~/components/EfficiencyChart'
 import { PerformanceCharts } from '~/components/PerformanceCharts'
 import { RunningMetrics } from '~/components/RunningMetrics'
 import { RunningCharts } from '~/components/RunningCharts'
+import { isRun } from '~/lib/tss'
 
 export const Route = createFileRoute('/_dashboard/performance')({
   component: PerformancePage,
@@ -24,7 +25,7 @@ function SectionHeading({ icon, title }: { icon: React.ReactNode; title: string 
 function PerformancePage() {
   const { statsActivities, lifetimeStatsActivities, weight, age, gender } = useDashboard()
 
-  const hasRuns = statsActivities.some((a) => a.type === 'Run')
+  const hasRuns = statsActivities.some(isRun)
 
   return (
     <div className="flex flex-col gap-8">

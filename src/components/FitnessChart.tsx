@@ -11,7 +11,7 @@ import {
   Legend,
 } from 'recharts'
 import { type StravaActivity } from '~/lib/strava'
-import { calculateFitnessOverTime, estimateFTPHistory } from '~/lib/performance'
+import { calculateFitnessOverTime } from '~/lib/performance'
 import { useDashboard } from '~/lib/dashboard-context'
 import { chartTheme, tooltipStyle, formatDateShort, formatDateFull } from '~/lib/chart-theme'
 import { RangeSelector } from './RangeSelector'
@@ -37,10 +37,11 @@ function getATLLevel(atl: number): { label: string; color: string } {
 
 export function FitnessChart({ activities }: FitnessChartProps) {
   const [days, setDays] = useState(30)
-  const { tssThresholds } = useDashboard()
+  const { tssThresholds, profile } = useDashboard()
 
-  // Auto-estimate FTP history from activity data
-  const ftpHistory = useMemo(() => estimateFTPHistory(activities), [activities])
+  // From the profile, so this chart's FTP history matches the one every other
+  // page uses rather than being re-estimated from whatever slice it was handed.
+  const ftpHistory = profile.ftpHistory
 
   // Current FTP is the latest entry
   const currentFtp = ftpHistory.length > 0 ? ftpHistory[ftpHistory.length - 1].ftp : null

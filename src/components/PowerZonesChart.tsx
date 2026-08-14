@@ -2,11 +2,11 @@ import { useMemo } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { type StravaActivity } from '~/lib/strava'
 import {
-  estimateFTP,
   getPowerZones,
   calculateZoneDistribution,
 } from '~/lib/performance'
 import { secondsToHMS } from '~/lib/strava'
+import { useDashboard } from '~/lib/dashboard-context'
 import { zoneColors, tooltipStyle } from '~/lib/chart-theme'
 
 interface PowerZonesChartProps {
@@ -14,7 +14,10 @@ interface PowerZonesChartProps {
 }
 
 export function PowerZonesChart({ activities }: PowerZonesChartProps) {
-  const ftp = useMemo(() => estimateFTP(activities), [activities])
+  // One FTP for the whole app — re-estimating it here from whatever slice this
+  // chart was handed produced a different number to the one on every other page.
+  const { profile } = useDashboard()
+  const ftp = profile.ftp || null
 
   const zoneData = useMemo(() => {
     if (!ftp) return []

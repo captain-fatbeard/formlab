@@ -21,6 +21,7 @@ import {
   CartesianGrid,
 } from 'recharts'
 import { Pagination } from '~/components/Pagination'
+import { isRide } from '~/lib/tss'
 
 const SEGMENTS_PAGE_SIZE = 10
 
@@ -266,7 +267,7 @@ function RecordsPage() {
 
   const powerRecords = useMemo(() => {
     const rides = activities.filter(
-      (a) => (a.type === 'Ride' || a.type === 'VirtualRide') && a.average_watts
+      (a) => isRide(a) && a.average_watts
     )
 
     return powerDurations.map(({ label, seconds }) => {

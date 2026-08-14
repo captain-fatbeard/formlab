@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react'
 import { type StravaActivity } from '~/lib/strava'
-import { calculateAdvancedMetrics, estimateFTP, estimateVO2max, getVO2maxCategory } from '~/lib/performance'
-import { isRide } from '~/lib/activities'
+import { calculateAdvancedMetrics, estimateVO2max, getVO2maxCategory } from '~/lib/performance'
 import { badgeClasses } from '~/lib/styles'
-import type { Gender } from '~/lib/dashboard-context'
+import { useDashboard, type Gender } from '~/lib/dashboard-context'
 
 interface AdvancedMetricsProps {
   activities: StravaActivity[]
@@ -13,8 +12,8 @@ interface AdvancedMetricsProps {
 }
 
 export function AdvancedMetrics({ activities, weight, age, gender }: AdvancedMetricsProps) {
-  const rides = activities.filter(isRide)
-  const ftp = estimateFTP(rides) || 0
+  const { profile } = useDashboard()
+  const ftp = profile.ftp
   const [sliderWeight, setSliderWeight] = useState(weight)
 
   const metrics = useMemo(() => calculateAdvancedMetrics(activities, ftp, weight, age, gender), [activities, ftp, weight, age, gender])

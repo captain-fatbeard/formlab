@@ -1,7 +1,7 @@
 import { startOfWeek, addWeeks } from 'date-fns'
 import { type StravaActivity } from './strava'
 import { zoneColors, formatDateShort } from './chart-theme'
-import { calculateTSS as calculateTSSWithThresholds, classifySport, type TssThresholds } from './tss'
+import { calculateTSS as calculateTSSWithThresholds, classifySport, isRide, isRun, type TssThresholds } from './tss'
 
 // FTP entry with effective date — FTP applies from this date until the next entry
 export interface FtpHistoryEntry {
@@ -51,7 +51,7 @@ function ftpFromRide(a: StravaActivity): number {
 // produce lower estimates and don't dominate.
 export function estimateFTP(activities: StravaActivity[]): number | null {
   const ridesWithPower = activities.filter(
-    (a) => (a.type === 'Ride' || a.type === 'VirtualRide') && (a.average_watts || a.weighted_average_watts)
+    (a) => isRide(a) && (a.average_watts || a.weighted_average_watts)
   )
 
   if (ridesWithPower.length === 0) return null
@@ -76,7 +76,7 @@ export function estimateFTP(activities: StravaActivity[]): number | null {
 // Returns entries sorted by date ascending
 export function estimateFTPHistory(activities: StravaActivity[]): FtpHistoryEntry[] {
   const ridesWithPower = activities
-    .filter((a) => (a.type === 'Ride' || a.type === 'VirtualRide') && (a.average_watts || a.weighted_average_watts) && a.moving_time >= 1200)
+    .filter((a) => isRide(a) && (a.average_watts || a.weighted_average_watts) && a.moving_time >= 1200)
     .sort((a, b) => a.start_date_local.localeCompare(b.start_date_local))
 
   if (ridesWithPower.length === 0) return []
@@ -165,7 +165,7 @@ export function calculateZoneDistribution(
   zones.forEach((z) => (zoneTime[z.name] = 0))
 
   const ridesWithPower = activities.filter(
-    (a) => (a.type === 'Ride' || a.type === 'VirtualRide') && a.average_watts
+    (a) => isRide(a) && a.average_watts
   )
 
   ridesWithPower.forEach((activity) => {
@@ -283,8 +283,8 @@ export interface PersonalRecord {
 export function calculatePersonalRecords(activities: StravaActivity[]): PersonalRecord[] {
   const records: PersonalRecord[] = []
 
-  const rides = activities.filter((a) => a.type === 'Ride' || a.type === 'VirtualRide')
-  const runs = activities.filter((a) => a.type === 'Run')
+  const rides = activities.filter((a) => isRide(a))
+  const runs = activities.filter((a) => isRun(a))
 
   // Longest ride
   if (rides.length > 0) {
@@ -638,7 +638,7 @@ export function calculateAdvancedMetrics(
   gender: 'male' | 'female' = 'male'
 ): AdvancedMetrics {
   const rides = activities.filter(
-    (a) => (a.type === 'Ride' || a.type === 'VirtualRide') && a.average_watts
+    (a) => isRide(a) && a.average_watts
   )
 
   if (rides.length === 0) {
@@ -755,8 +755,8 @@ export function calculateWeeklySummaries(
       return date >= weekStart && date < weekEnd
     })
 
-    const rides = weekActivities.filter((a) => a.type === 'Ride' || a.type === 'VirtualRide')
-    const runs = weekActivities.filter((a) => a.type === 'Run')
+    const rides = weekActivities.filter((a) => isRide(a))
+    const runs = weekActivities.filter((a) => isRun(a))
 
     const ridesWithPower = rides.filter((a) => a.average_watts)
     const avgPower =
@@ -1063,7 +1063,7 @@ export function calculateActivityScores(
 ): ActivityScore[] {
   const rides = activities.filter(
     (a) =>
-      (a.type === 'Ride' || a.type === 'VirtualRide') &&
+      isRide(a) &&
       a.moving_time >= 600 &&
       (a.suffer_score || a.average_heartrate || a.average_watts)
   )
@@ -1157,7 +1157,7 @@ export function calculateRunningMetrics(
   age: number = 35,
   gender: 'male' | 'female' = 'male'
 ): RunningMetrics {
-  const runs = activities.filter((a) => a.type === 'Run')
+  const runs = activities.filter((a) => isRun(a))
 
   const empty: RunningMetrics = {
     avgPace: 0,

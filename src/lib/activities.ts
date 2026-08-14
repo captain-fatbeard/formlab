@@ -1,22 +1,6 @@
-import { type StravaActivity } from './strava'
-
-/** Filter activities to those within the last N days. If days is 0, return all. */
-export function filterByDays(activities: StravaActivity[], days: number): StravaActivity[] {
-  if (days === 0) return activities
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - days)
-  return activities.filter((a) => new Date(a.start_date) >= cutoff)
-}
-
-/** Check if an activity is a cycling activity */
-export function isRide(a: StravaActivity): boolean {
-  return a.type === 'Ride' || a.type === 'VirtualRide'
-}
-
-/** Check if an activity is a running activity */
-export function isRun(a: StravaActivity): boolean {
-  return a.type === 'Run'
-}
+// Sport identity lives in ./tss with classifySport — re-exported here so the
+// existing import sites keep working. Don't add a second definition.
+export { isRide, isRun } from './tss'
 
 /** Get a human-readable score label from a numeric ride score.
  * Scores are TSS-like training load, so bands follow TSS semantics:

@@ -35,11 +35,29 @@ const MIN_QUALIFYING_EFFORTS = 3
 const TOP_EFFORTS = 3
 const MAX_INTENSITY_FACTOR = 1.15
 
+// The one place that decides what sport an activity is. Everything that filters
+// by sport goes through here, so adding a type is a one-line change and a new
+// type can't end up counting toward CTL while being invisible to FTP, power
+// zones, records and the activity list — which is what happened to GravelRide
+// and MountainBikeRide while seven call sites each tested for 'Ride' by hand.
+//
+// intervals.icu reports the specific type in `sport_type` (mapped from its
+// `sub_type`), so read that before falling back to the coarse `type`.
 export function classifySport(activity: StravaActivity): Sport {
   const t = activity.sport_type || activity.type
   if (CYCLING_TYPES.has(t)) return 'cycling'
   if (RUNNING_TYPES.has(t)) return 'running'
   return 'other'
+}
+
+/** Any cycling activity — road, gravel, MTB, e-bike, indoor, handcycle. */
+export function isRide(activity: StravaActivity): boolean {
+  return classifySport(activity) === 'cycling'
+}
+
+/** Any running activity — road, trail, treadmill. */
+export function isRun(activity: StravaActivity): boolean {
+  return classifySport(activity) === 'running'
 }
 
 // Minetti et al. 2002 — energy cost of running on a gradient (J/kg/m).
