@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { StravaActivity } from '~/lib/strava'
+import type { TssThresholds } from '~/lib/tss'
 import {
   estimateFTP,
   getPowerZones,
@@ -561,14 +562,23 @@ describe('calculateAdvancedMetrics', () => {
 // Activity Scoring
 // ===================================================================
 
+const scoreThresholds: TssThresholds = {
+  ftp: 200,
+  cyclingLTHR: 165,
+  runningLTHR: 175,
+  runningThresholdPace: 4.0,
+  maxHR: 195,
+  restingHR: 50,
+}
+
 describe('calculateActivityScores', () => {
   it('returns empty for no qualifying rides', () => {
-    expect(calculateActivityScores([], 200)).toEqual([])
+    expect(calculateActivityScores([], scoreThresholds)).toEqual([])
   })
 
   it('filters out rides shorter than 10 minutes', () => {
     const activities = [makeRide({ average_watts: 200, moving_time: 300 })]
-    expect(calculateActivityScores(activities, 200)).toEqual([])
+    expect(calculateActivityScores(activities, scoreThresholds)).toEqual([])
   })
 
   it('scores rides with power', () => {
@@ -580,11 +590,17 @@ describe('calculateActivityScores', () => {
         total_elevation_gain: 500,
       }),
     ]
-    const scores = calculateActivityScores(activities, 200)
+    const scores = calculateActivityScores(activities, scoreThresholds)
     expect(scores).toHaveLength(1)
     expect(scores[0].rideScore).toBeGreaterThan(0)
     expect(scores[0].effortScore).toBeGreaterThan(0)
     expect(scores[0].difficultyScore).toBeGreaterThan(0)
+  })
+
+  it('reports the same load the plan and fitness chart use', () => {
+    const ride = makeRide({ average_watts: 200, moving_time: 3600 })
+    const scores = calculateActivityScores([ride], scoreThresholds)
+    expect(scores[0].rideScore).toBe(calculateTSS(ride, scoreThresholds))
   })
 })
 

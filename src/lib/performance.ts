@@ -204,9 +204,12 @@ export function calculateFitnessOverTime(
 ): FitnessData[] {
   const trackedActivities = activities.filter((a) => {
     const sport = classifySport(a)
+    if (sport === 'other') return false
+    // A reported intervals.icu load is enough on its own — calculateTSS prefers
+    // it over the averages anyway.
+    if (a.suffer_score) return true
     if (sport === 'cycling') return Boolean(a.average_watts || a.average_heartrate)
-    if (sport === 'running') return a.average_speed > 0 || Boolean(a.average_heartrate)
-    return false
+    return a.average_speed > 0 || Boolean(a.average_heartrate)
   })
 
   if (trackedActivities.length === 0 || ftpHistory.length === 0) return []
@@ -1051,41 +1054,12 @@ function calcEffortScore(power: number, durationHours: number): number {
   return Math.round(power * Math.sqrt(durationHours) / 10)
 }
 
-// Ride Score: TSS-like training load, best available signal first.
-// 1. intervals.icu training load (suffer_score) — HR-based, computed from the
-//    full HR stream, present on every ride since the July 2026 switch.
-// 2. hrTSS estimated from avg HR: hours × (HRR fraction / 0.85)² × 100,
-//    assuming LTHR ≈ 85% of heart-rate reserve. Calibrated against the
-//    intervals.icu loads above (within ~5% on rides with both).
-// 3. Power TSS from (estimated) watts: hours × (power/FTP)² × 100. Weakest
-//    signal — all this athlete's watts are estimates — so it's last.
-function calcRideScore(
-  ride: StravaActivity,
-  power: number,
-  durationHours: number,
-  ftp: number,
-  maxHR: number,
-  restingHR: number,
-): number {
-  if (ride.suffer_score && ride.suffer_score > 0) return Math.round(ride.suffer_score)
-
-  const avgHR = ride.average_heartrate || 0
-  if (avgHR > restingHR && maxHR > restingHR) {
-    const hrrFrac = (avgHR - restingHR) / (maxHR - restingHR)
-    return Math.round(100 * durationHours * (hrrFrac / 0.85) ** 2)
-  }
-
-  if (power && ftp > 0) {
-    return Math.round(100 * durationHours * (power / ftp) ** 2)
-  }
-  return 0
-}
-
+// Ride Score is the same training load the plan and the fitness chart use —
+// see calculateTSS in ./tss for the signal precedence. Keeping one source here
+// is what stops a ride from reading 72 in the list and something else on /plan.
 export function calculateActivityScores(
   activities: StravaActivity[],
-  ftp: number,
-  maxHR = 0,
-  restingHR = 0,
+  thresholds: TssThresholds,
 ): ActivityScore[] {
   const rides = activities.filter(
     (a) =>
@@ -1108,7 +1082,7 @@ export function calculateActivityScores(
       name: ride.name,
       date: ride.start_date_local,
       dateKey: `${ride.start_date_local}_${ride.id}`,
-      rideScore: calcRideScore(ride, power, durationHours, ftp, maxHR, restingHR),
+      rideScore: calculateTSSWithThresholds(ride, thresholds),
       difficultyScore: calcDifficultyScore(distanceKm, elevationGain),
       effortScore: calcEffortScore(power, durationHours),
       distanceKm: Math.round(distanceKm * 10) / 10,

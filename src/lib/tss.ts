@@ -1,4 +1,5 @@
 import { type StravaActivity } from './strava'
+import { isIntervalsActivityId } from './intervals'
 
 export type Sport = 'cycling' | 'running' | 'other'
 
@@ -100,8 +101,29 @@ function paceTSS(activity: StravaActivity, thresholdPace: number): number {
   return Math.round(hours * intensityFactor * intensityFactor * 100)
 }
 
+// Training load as intervals.icu computed it (`icu_training_load`, stored in
+// `suffer_score`). It comes from the full power/HR stream, so it beats anything
+// derivable from ride averages — a hilly ride and a steady one with the same
+// average watts get the loads their normalized power deserves.
+//
+// Only intervals.icu-sourced activities carry it. Strava writes its own Relative
+// Effort into the same field on an unrelated scale, so the id check is what
+// keeps the two out of one number.
+function reportedTrainingLoad(activity: StravaActivity): number | null {
+  if (!isIntervalsActivityId(activity.id)) return null
+  const load = activity.suffer_score
+  return load && load > 0 ? Math.round(load) : null
+}
+
+// The one training-load number for an activity — best available signal first.
+// Every surface that shows load (activity list, plan, CTL/ATL) goes through
+// here, so a ride reads the same everywhere.
 export function calculateTSS(activity: StravaActivity, thresholds: TssThresholds): number {
   const sport = classifySport(activity)
+  if (sport === 'other') return 0
+
+  const reported = reportedTrainingLoad(activity)
+  if (reported !== null) return reported
 
   if (sport === 'cycling') {
     if (activity.average_watts && thresholds.ftp > 0) return powerTSS(activity, thresholds.ftp)

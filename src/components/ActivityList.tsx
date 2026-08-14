@@ -3,8 +3,8 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { type StravaActivity, metersToKm, secondsToHMS } from '~/lib/strava'
 import { useDashboard, type ActivityGroup } from '~/lib/dashboard-context'
 import { formatDateFull } from '~/lib/chart-theme'
-import { calculateActivityScores, estimateFTP } from '~/lib/performance'
-import { isRide, getScoreLabel, scoreLabelClasses, activityTypeClasses } from '~/lib/activities'
+import { calculateActivityScores } from '~/lib/performance'
+import { getScoreLabel, scoreLabelClasses, activityTypeClasses } from '~/lib/activities'
 import { Pagination } from '~/components/Pagination'
 
 const ACTIVITIES_PAGE_SIZE = 25
@@ -86,7 +86,7 @@ function aggregateGroup(group: ActivityGroup, activities: StravaActivity[]): Mer
 }
 
 export function ActivityList({ activities }: ActivityListProps) {
-  const { trainingActivityIds, toggleActivityCategory, activityGroups, createGroup, deleteGroup, updateGroupName, maxHR, restingHR } = useDashboard()
+  const { trainingActivityIds, toggleActivityCategory, activityGroups, createGroup, deleteGroup, updateGroupName, tssThresholds } = useDashboard()
   const navigate = useNavigate()
 
   const [groupMode, setGroupMode] = useState(false)
@@ -131,13 +131,12 @@ export function ActivityList({ activities }: ActivityListProps) {
   }, [activities])
 
   const scoreMap = useMemo(() => {
-    const rides = activities.filter(isRide)
-    const ftp = estimateFTP(rides) || 0
-    const scores = calculateActivityScores(activities, ftp, maxHR, restingHR)
+    const scores = calculateActivityScores(activities, tssThresholds)
     const map = new Map<number, number>()
-    for (const s of scores) map.set(s.activityId, s.rideScore)
+    // A ride we can't derive load for shows no score rather than "0 · Easy".
+    for (const s of scores) if (s.rideScore > 0) map.set(s.activityId, s.rideScore)
     return map
-  }, [activities, maxHR, restingHR])
+  }, [activities, tssThresholds])
 
   const matchesFilters = useCallback(
     (a: StravaActivity): boolean => {

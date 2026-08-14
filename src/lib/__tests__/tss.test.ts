@@ -8,6 +8,7 @@ import {
   gradeAdjustedSpeed,
   type TssThresholds,
 } from '~/lib/tss'
+import { INTERVALS_ID_OFFSET } from '~/lib/intervals'
 
 function makeActivity(overrides: Partial<StravaActivity> = {}): StravaActivity {
   return {
@@ -92,6 +93,36 @@ describe('gradeAdjustedSpeed', () => {
   it('exceeds average_speed on a hilly route', () => {
     const hilly = makeActivity({ average_speed: 4.0, total_elevation_gain: 200, distance: 10000 })
     expect(gradeAdjustedSpeed(hilly)).toBeGreaterThan(4.0)
+  })
+})
+
+describe('calculateTSS — reported intervals.icu load', () => {
+  const intervalsRide = (overrides: Partial<StravaActivity> = {}) =>
+    makeActivity({ id: INTERVALS_ID_OFFSET + 164403937, ...overrides })
+
+  it('prefers the reported load over the power estimate', () => {
+    // Power says 100; the stream-derived load says 72 and wins.
+    const a = intervalsRide({ moving_time: 3600, average_watts: 250, suffer_score: 72 })
+    expect(calculateTSS(a, fullThresholds)).toBe(72)
+  })
+
+  it('ignores Strava Relative Effort on Strava-sourced activities', () => {
+    // Same field, unrelated scale — must fall through to the power estimate.
+    const a = makeActivity({ moving_time: 3600, average_watts: 250, suffer_score: 72 })
+    expect(calculateTSS(a, fullThresholds)).toBe(100)
+  })
+
+  it('falls through when intervals.icu reported no load', () => {
+    const a = intervalsRide({ moving_time: 3600, average_watts: 250, suffer_score: 0 })
+    expect(calculateTSS(a, fullThresholds)).toBe(100)
+  })
+
+  it('separates two rides with equal average power but different loads', () => {
+    // The case that started this: same avg watts, very different normalized power.
+    const hilly = intervalsRide({ moving_time: 4041, average_watts: 171, suffer_score: 72 })
+    const steady = intervalsRide({ moving_time: 3909, average_watts: 170, suffer_score: 51 })
+    expect(calculateTSS(hilly, fullThresholds)).toBe(72)
+    expect(calculateTSS(steady, fullThresholds)).toBe(51)
   })
 })
 
