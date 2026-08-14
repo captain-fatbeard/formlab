@@ -272,9 +272,11 @@ const syncSteps: Step[] = [
     title: 'Fetched activities are deduped, then merged',
     body: (
       <>
-        <Code>dedupeAgainstExisting</Code> drops fetched copies of activities that already exist under a
-        Strava id, the rest merge into the in-memory set by id, and only genuinely new rows get upserted.
-        Locally-enriched fields (estimated watts) are re-applied so a sync never wipes them.
+        <Code>reconcile</Code> makes the whole merge in one decision: fetched copies of activities that
+        already exist under a Strava id are dropped, the rest merge into the set by id, and only genuinely
+        new rows get upserted. Locally-enriched fields (estimated watts) are re-applied so a sync never
+        wipes them. It takes a <Code>KnownActivities</Code>, which only a successful cache read can
+        produce — so a failed read can't be mistaken for an empty cache.
       </>
     ),
   },
@@ -349,8 +351,9 @@ const invariants: { title: string; body: React.ReactNode }[] = [
     title: 'Duplicates self-heal on boot',
     body: (
       <>
-        <Code>findIntervalsDuplicateIds</Code> spots intervals.icu copies of Strava-era activities in the
-        cache, removes them from the working set and deletes them from Supabase.
+        The same <Code>reconcile</Code> call with nothing fetched spots intervals.icu copies of Strava-era
+        activities in the cache, removes them from the working set and reports them as
+        <Code>toDelete</Code> for removal from Supabase.
       </>
     ),
   },

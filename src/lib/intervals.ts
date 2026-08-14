@@ -150,10 +150,6 @@ export function mapIntervalsActivity(a: IntervalsActivity): StravaActivity {
   }
 }
 
-// Two activities of the same type starting within this window are considered the
-// same workout recorded by two sources (Strava cache vs intervals.icu backfill).
-const DUPLICATE_WINDOW_MS = 3 * 60 * 1000
-
 // The two sources don't always agree on an activity's type: indoor rides from
 // 2020 come back from intervals.icu as 'Ride' but were cached from Strava as
 // 'VirtualRide'. Comparing raw types lets that disagreement defeat the
@@ -180,40 +176,9 @@ export function activityTypeFamily(type: string): string {
   return TYPE_FAMILIES[type] ?? type
 }
 
-export function dedupeAgainstExisting(
-  fetched: StravaActivity[],
-  existing: StravaActivity[]
-): StravaActivity[] {
-  const existingIds = new Set(existing.map((a) => a.id))
-  const existingByType = new Map<string, number[]>()
-  for (const a of existing) {
-    const family = activityTypeFamily(a.type)
-    const starts = existingByType.get(family) ?? []
-    starts.push(new Date(a.start_date).getTime())
-    existingByType.set(family, starts)
-  }
-
-  return fetched.filter((a) => {
-    if (existingIds.has(a.id)) return true // same id upserts in place
-    const starts = existingByType.get(activityTypeFamily(a.type))
-    if (!starts) return true
-    const start = new Date(a.start_date).getTime()
-    return !starts.some((s) => Math.abs(s - start) < DUPLICATE_WINDOW_MS)
-  })
-}
-
-// Self-heal: ids of intervals.icu-sourced activities that duplicate a
-// Strava-era activity (same type, started within the duplicate window).
-// These can appear if a sync ever ran against an incomplete view of the
-// cache; the Strava copy wins since it carries details and power estimates.
-export function findIntervalsDuplicateIds(activities: StravaActivity[]): number[] {
-  const stravaEra = activities.filter((a) => !isIntervalsActivityId(a.id))
-  const intervalsEra = activities.filter((a) => isIntervalsActivityId(a.id))
-  if (stravaEra.length === 0 || intervalsEra.length === 0) return []
-
-  const kept = new Set(dedupeAgainstExisting(intervalsEra, stravaEra).map((a) => a.id))
-  return intervalsEra.filter((a) => !kept.has(a.id)).map((a) => a.id)
-}
+// Duplicate detection and merge live in lib/sync/reconcile — they are one
+// decision, and splitting them across files is what let a caller pass an
+// incomplete cache without any pure-function test noticing.
 
 // Google encoded polyline (precision 5), as used by Strava's summary_polyline.
 export function encodePolyline(points: Array<[number, number]>): string {

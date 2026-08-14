@@ -7,7 +7,8 @@ import {
   type ActivityType,
 } from '~/lib/storage/supabase-client'
 import { fetchIntervalsActivities, fetchIntervalsActivityDetails } from '~/lib/server-functions'
-import { dedupeAgainstExisting, isIntervalsActivityId, findIntervalsDuplicateIds } from '~/lib/intervals'
+import { isIntervalsActivityId } from '~/lib/intervals'
+import { reconcile, knownActivities, type KnownActivities } from '~/lib/sync/reconcile'
 import { type StravaActivity, type StravaAthlete, metersToKm } from '~/lib/strava'
 import { calculateMaxHR, calculateRestingHR, calculateAge } from '~/lib/performance'
 import { isRide, isRun } from '~/lib/tss'
@@ -180,19 +181,24 @@ function DashboardLayout() {
   // Kept in sync manually wherever activities are set from async flows.
   const activitiesRef = useRef<StravaActivity[]>([])
 
-  // True only after the cached-activities query has SUCCEEDED (an empty cache
-  // is fine; a failed query is not). Sync must never write results back while
-  // this is false — deduplication against an incomplete view of the cache
-  // permanently duplicates every activity that exists under a Strava id.
-  const cacheHealthyRef = useRef(false)
+  // Set only once a cached-activities read has SUCCEEDED (an empty cache is
+  // fine; a failed query is not). Null means we have no complete view, and
+  // reconcile() can't be called without one — which is what stops a sync from
+  // deduplicating against a partial cache and permanently duplicating every
+  // activity that already exists under a Strava id.
+  const knownRef = useRef<KnownActivities | null>(null)
 
   // When the last sync with intervals.icu completed. Used to throttle the
   // re-sync that runs whenever the tab becomes visible again.
   const lastSyncAtRef = useRef(0)
   const syncInFlightRef = useRef(false)
 
+  // Every path that replaces the activity set goes through here, so the view
+  // the next sync reconciles against can't drift from what's on screen — the
+  // detail backfill patches activities too, and used to leave it behind.
   const applyActivities = useCallback((merged: StravaActivity[]) => {
     activitiesRef.current = merged
+    knownRef.current = knownActivities(merged)
     setActivities(merged)
   }, [])
 
@@ -226,38 +232,26 @@ function DashboardLayout() {
           data: { passphrase, afterDate },
         })
 
-        const existing = activitiesRef.current
-        const byId = new Map<number, StravaActivity>()
-        for (const a of existing) byId.set(a.id, a)
+        // No complete view of the cache means nothing safe to reconcile
+        // against — bail rather than dedupe against a partial set.
+        const known = knownRef.current
+        if (!known) return { added: 0, persisted: false }
 
-        // Preserve locally-enriched fields (estimated power patched onto rides
-        // without a power meter) that a re-fetched copy from intervals.icu
-        // wouldn't carry — otherwise every sync wipes the estimates.
-        const fresh = dedupeAgainstExisting(fetchedActivities, existing).map((a) => {
-          const prev = byId.get(a.id)
-          return prev?.average_watts && !a.average_watts
-            ? { ...a, average_watts: prev.average_watts }
-            : a
-        })
-
-        const addedCount = fresh.filter((a) => !byId.has(a.id)).length
-
-        for (const a of fresh) byId.set(a.id, a)
-        applyActivities(
-          Array.from(byId.values()).sort(
-            (a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
-          )
-        )
+        const result = reconcile(known, fetchedActivities)
+        applyActivities(result.activities)
 
         // Awaited: the detail backfill immediately queries Supabase for rows
         // without details_json, so these have to be committed before it runs.
         let persisted = true
-        if (isSupabaseConfigured() && cacheHealthyRef.current && fresh.length > 0) {
-          persisted = await upsertActivities(storedAthlete.id, fresh)
+        if (isSupabaseConfigured() && result.toUpsert.length > 0) {
+          persisted = await upsertActivities(storedAthlete.id, result.toUpsert)
+        }
+        if (isSupabaseConfigured() && result.toDelete.length > 0) {
+          deleteActivities(storedAthlete.id, result.toDelete)
         }
 
         lastSyncAtRef.current = Date.now()
-        return { added: addedCount, persisted }
+        return { added: result.added, persisted }
       } finally {
         syncInFlightRef.current = false
       }
@@ -437,34 +431,32 @@ function DashboardLayout() {
         setTrainingActivityIds(trainingIds)
         setActivityGroups(groups)
 
-        // null = query failed → cache state unknown, sync stays read-only
+        // null = the query failed. Without a complete view we can't build a
+        // KnownActivities, so a sync has nothing to reconcile against and
+        // stays read-only — see reconcile().
         if (cachedActivities !== null) {
-          cacheHealthyRef.current = true
+          // Heal-only pass: drop intervals.icu copies that duplicate a
+          // Strava-era activity, and delete them from Supabase.
+          const healed = reconcile(knownActivities(cachedActivities))
+          knownRef.current = knownActivities(healed.activities)
 
-          // Self-heal: drop intervals.icu copies that duplicate a Strava-era
-          // activity (can happen if a past sync ran against a failed cache
-          // read) and delete them from Supabase.
-          const duplicateIds = findIntervalsDuplicateIds(cachedActivities)
-          const cleaned =
-            duplicateIds.length > 0
-              ? cachedActivities.filter((a) => !duplicateIds.includes(a.id))
-              : cachedActivities
-          if (duplicateIds.length > 0) {
-            console.warn(`Removing ${duplicateIds.length} duplicate activities`)
-            deleteActivities(storedAthlete.id, duplicateIds)
+          if (healed.toDelete.length > 0) {
+            console.warn(`Removing ${healed.toDelete.length} duplicate activities`)
+            deleteActivities(storedAthlete.id, healed.toDelete)
           }
 
           // If we have cached data, show it immediately
-          if (cleaned.length > 0) {
+          if (healed.activities.length > 0) {
             hasCachedData = true
-            activitiesRef.current = cleaned
-            setActivities(cleaned)
+            activitiesRef.current = healed.activities
+            setActivities(healed.activities)
             setIsLoading(false)
           }
         }
       } else {
-        // No Supabase at all — nothing to corrupt, sync freely
-        cacheHealthyRef.current = true
+        // No Supabase at all — nothing to corrupt, so an empty set is a
+        // complete and accurate view.
+        knownRef.current = knownActivities([])
       }
       settingsLoaded.current = true
 

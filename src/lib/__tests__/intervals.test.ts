@@ -5,16 +5,13 @@ import {
   toIntervalsApiId,
   fromIntervalsApiId,
   mapIntervalsActivity,
-  dedupeAgainstExisting,
   activityTypeFamily,
-  findIntervalsDuplicateIds,
   encodePolyline,
   computeSplitsFromStreams,
   estimatePowerStream,
   averageMovingPower,
   type IntervalsActivity,
 } from '~/lib/intervals'
-import type { StravaActivity } from '~/lib/strava'
 
 function makeIntervalsActivity(overrides: Partial<IntervalsActivity> = {}): IntervalsActivity {
   return {
@@ -48,24 +45,6 @@ function makeIntervalsActivity(overrides: Partial<IntervalsActivity> = {}): Inte
     trainer: null,
     strava_id: null,
     stream_types: ['time', 'heartrate', 'distance'],
-    ...overrides,
-  }
-}
-
-function makeStravaActivity(overrides: Partial<StravaActivity> = {}): StravaActivity {
-  return {
-    id: 19113368753,
-    name: 'Løb om aftenen',
-    type: 'Run',
-    sport_type: 'Run',
-    start_date: '2026-06-29T17:12:56Z',
-    start_date_local: '2026-06-29T19:12:56Z',
-    distance: 5000,
-    moving_time: 1500,
-    elapsed_time: 1550,
-    total_elevation_gain: 30,
-    average_speed: 3.3,
-    max_speed: 4.1,
     ...overrides,
   }
 }
@@ -107,79 +86,6 @@ describe('mapIntervalsActivity', () => {
   })
 })
 
-describe('dedupeAgainstExisting', () => {
-  it('drops a fetched activity that matches an existing one by type and start time', () => {
-    const existing = [makeStravaActivity()] // Strava-cached run, 17:12:56Z
-    const fetched = [
-      mapIntervalsActivity(
-        makeIntervalsActivity({
-          id: 'i164403943',
-          type: 'Run',
-          start_date: '2026-06-29T17:12:56Z', // same run, Garmin-sourced
-        })
-      ),
-    ]
-    expect(dedupeAgainstExisting(fetched, existing)).toHaveLength(0)
-  })
-
-  it('keeps activities with no time collision', () => {
-    const existing = [makeStravaActivity()]
-    const fetched = [
-      mapIntervalsActivity(
-        makeIntervalsActivity({ id: 'i164403999', type: 'Run', start_date: '2026-07-01T18:17:21Z' })
-      ),
-    ]
-    expect(dedupeAgainstExisting(fetched, existing)).toHaveLength(1)
-  })
-
-  it('keeps same-type activities outside the duplicate window', () => {
-    const existing = [makeStravaActivity()]
-    const fetched = [
-      mapIntervalsActivity(
-        makeIntervalsActivity({ id: 'i164403999', type: 'Run', start_date: '2026-06-29T17:20:00Z' })
-      ),
-    ]
-    expect(dedupeAgainstExisting(fetched, existing)).toHaveLength(1)
-  })
-
-  it('always keeps re-fetches of an already-known id so they upsert in place', () => {
-    const known = mapIntervalsActivity(makeIntervalsActivity())
-    expect(dedupeAgainstExisting([known], [known])).toHaveLength(1)
-  })
-
-  it('does not collide activities of different types at the same time', () => {
-    const existing = [makeStravaActivity({ type: 'Ride' })]
-    const fetched = [
-      mapIntervalsActivity(
-        makeIntervalsActivity({ id: 'i164403999', type: 'Run', start_date: '2026-06-29T17:12:56Z' })
-      ),
-    ]
-    expect(dedupeAgainstExisting(fetched, existing)).toHaveLength(1)
-  })
-
-  it('drops a duplicate the two sources disagree about the type of', () => {
-    // Old Zwift sessions were cached from Strava as VirtualRide but come back
-    // from intervals.icu as plain Ride — a full sync used to insert both.
-    const existing = [makeStravaActivity({ type: 'VirtualRide', start_date: '2020-04-22T15:21:36Z' })]
-    const fetched = [
-      mapIntervalsActivity(
-        makeIntervalsActivity({ id: 'i171152527', type: 'Ride', start_date: '2020-04-22T15:21:36Z' })
-      ),
-    ]
-    expect(dedupeAgainstExisting(fetched, existing)).toHaveLength(0)
-  })
-
-  it('keeps a ride that only shares a start time with a run', () => {
-    const existing = [makeStravaActivity({ type: 'Run', start_date: '2020-04-22T15:21:36Z' })]
-    const fetched = [
-      mapIntervalsActivity(
-        makeIntervalsActivity({ id: 'i171152527', type: 'VirtualRide', start_date: '2020-04-22T15:21:36Z' })
-      ),
-    ]
-    expect(dedupeAgainstExisting(fetched, existing)).toHaveLength(1)
-  })
-})
-
 describe('activityTypeFamily', () => {
   it('groups the variants the two sources use interchangeably', () => {
     expect(activityTypeFamily('VirtualRide')).toBe(activityTypeFamily('Ride'))
@@ -190,33 +96,6 @@ describe('activityTypeFamily', () => {
   it('keeps unrelated types apart and passes unknown ones through', () => {
     expect(activityTypeFamily('Ride')).not.toBe(activityTypeFamily('Run'))
     expect(activityTypeFamily('WeightTraining')).toBe('WeightTraining')
-  })
-})
-
-describe('findIntervalsDuplicateIds', () => {
-  it('flags intervals copies of Strava-era activities', () => {
-    const stravaRun = makeStravaActivity() // Run at 2026-06-29T17:12:56Z
-    const intervalsCopy = mapIntervalsActivity(
-      makeIntervalsActivity({ id: 'i164403943', type: 'Run', start_date: '2026-06-29T17:12:56Z' })
-    )
-    const legitNew = mapIntervalsActivity(
-      makeIntervalsActivity({ id: 'i164403999', type: 'Ride', start_date: '2026-07-09T09:15:02Z' })
-    )
-    const ids = findIntervalsDuplicateIds([stravaRun, intervalsCopy, legitNew])
-    expect(ids).toEqual([intervalsCopy.id])
-  })
-
-  it('returns empty when there is nothing to heal', () => {
-    const stravaRun = makeStravaActivity()
-    const legitNew = mapIntervalsActivity(makeIntervalsActivity())
-    expect(findIntervalsDuplicateIds([stravaRun, legitNew])).toEqual([])
-    expect(findIntervalsDuplicateIds([])).toEqual([])
-  })
-
-  it('never flags Strava-era activities themselves', () => {
-    const a = makeStravaActivity({ id: 1 })
-    const b = makeStravaActivity({ id: 2 }) // same time+type, both Strava-era
-    expect(findIntervalsDuplicateIds([a, b])).toEqual([])
   })
 })
 
