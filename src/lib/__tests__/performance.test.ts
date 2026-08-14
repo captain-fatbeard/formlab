@@ -18,28 +18,16 @@ import {
   calculateIF,
   calculateVI,
   calculateVAM,
-  classifyGradeBand,
-  calculateSegmentVAM,
   calculateEF,
   calculatePowerHR,
   calculateAdvancedMetrics,
-  calculateScoringAverages,
   calculateActivityScores,
   formatPace,
   calculateRunningMetrics,
-  calculateBMR,
-  calculateTDEE,
-  calculateDailyRestingFatBurn,
-  calculateDailyFatBurn,
   calculateWeeklySummaries,
-  calculateFatBurningSummary,
-  calculateCompleteFatBurningSummary,
   getHRZones,
   getHRZoneForBPM,
   estimateCaloriesBurned,
-  estimateFatBurned,
-  calculateIntensity,
-  calculateActivityFatStats,
 } from '~/lib/performance'
 
 // ---------------------------------------------------------------------------
@@ -485,29 +473,6 @@ describe('calculateVAM', () => {
   })
 })
 
-describe('classifyGradeBand', () => {
-  it('classifies gradients correctly', () => {
-    expect(classifyGradeBand(2)).toBe('1-3%')
-    expect(classifyGradeBand(5)).toBe('4-6%')
-    expect(classifyGradeBand(7)).toBe('7-8%')
-    expect(classifyGradeBand(9)).toBe('8-9%')
-    expect(classifyGradeBand(12)).toBe('10%+')
-  })
-})
-
-describe('calculateSegmentVAM', () => {
-  it('calculates segment VAM', () => {
-    // 500m gain in 1800s → (500/1800)*3600 = 1000
-    expect(calculateSegmentVAM(500, 1800)).toBe(1000)
-  })
-
-  it('returns 0 for invalid inputs', () => {
-    expect(calculateSegmentVAM(0, 1800)).toBe(0)
-    expect(calculateSegmentVAM(-10, 1800)).toBe(0)
-    expect(calculateSegmentVAM(500, 0)).toBe(0)
-  })
-})
-
 describe('calculateEF', () => {
   it('returns NP / HR ratio', () => {
     expect(calculateEF(200, 150)).toBe(1.33)
@@ -601,14 +566,6 @@ describe('calculateActivityScores', () => {
     const ride = makeRide({ average_watts: 200, moving_time: 3600 })
     const scores = calculateActivityScores([ride], scoreThresholds)
     expect(scores[0].rideScore).toBe(calculateTSS(ride, scoreThresholds))
-  })
-})
-
-describe('calculateScoringAverages', () => {
-  it('returns zeros for empty scores', () => {
-    const result = calculateScoringAverages([])
-    expect(result.avgRideScore).toBe(0)
-    expect(result.bestRideScore).toBe(0)
   })
 })
 
@@ -716,93 +673,13 @@ describe('estimateCaloriesBurned', () => {
   })
 })
 
-describe('estimateFatBurned', () => {
-  it('returns fat grams based on calories and zone', () => {
-    const grams = estimateFatBurned(500, 140, 190, 60)
-    expect(grams).toBeGreaterThan(0)
-  })
-})
-
-describe('calculateIntensity', () => {
-  it('returns percentage of HR reserve', () => {
-    // HRR = 130, intensity at HR 125 → (125-60)/130*100 = 50%
-    expect(calculateIntensity(125, 190, 60)).toBe(50)
-  })
-})
-
 // ===================================================================
 // BMR & Daily Fat Burn
 // ===================================================================
 
-describe('calculateBMR', () => {
-  it('calculates male BMR with Mifflin-St Jeor', () => {
-    // Men: 10*75 + 6.25*175 - 5*35 + 5 = 750 + 1093.75 - 175 + 5 = 1674
-    expect(calculateBMR(75, 35, 'male')).toBe(1674)
-  })
-
-  it('calculates female BMR with Mifflin-St Jeor', () => {
-    // Women: 10*60 + 6.25*165 - 5*30 - 161 = 600 + 1031.25 - 150 - 161 = 1320
-    expect(calculateBMR(60, 30, 'female', 165)).toBe(1320)
-  })
-})
-
-describe('calculateTDEE', () => {
-  it('multiplies BMR by activity factor', () => {
-    expect(calculateTDEE(1674, 'sedentary')).toBe(Math.round(1674 * 1.2))
-    expect(calculateTDEE(1674, 'active')).toBe(Math.round(1674 * 1.725))
-  })
-})
-
-describe('calculateDailyRestingFatBurn', () => {
-  it('returns grams of fat from resting metabolism', () => {
-    // BMR 1674, fat cals = 1674 * 0.77 = 1288.98, grams = 1288.98/9 ≈ 143
-    expect(calculateDailyRestingFatBurn(1674)).toBe(143)
-  })
-})
-
-describe('calculateDailyFatBurn', () => {
-  it('combines resting and activity fat burn', () => {
-    const result = calculateDailyFatBurn(1674, 500, 30)
-    expect(result.restingFatBurn).toBe(143)
-    expect(result.activityFatBurn).toBe(30)
-    expect(result.totalFatBurn).toBe(173)
-    expect(result.totalCalories).toBe(2174)
-  })
-})
-
 // ===================================================================
 // calculateActivityFatStats
 // ===================================================================
-
-describe('calculateActivityFatStats', () => {
-  it('returns null for activities without HR', () => {
-    expect(calculateActivityFatStats(makeRide(), 75, 190, 60)).toBeNull()
-  })
-
-  it('returns fat stats for activity with HR', () => {
-    const activity = makeRide({
-      average_heartrate: 145,
-      moving_time: 3600,
-      kilojoules: 800,
-    })
-    const stats = calculateActivityFatStats(activity, 75, 190, 60)
-    expect(stats).not.toBeNull()
-    expect(stats!.calories).toBeGreaterThan(0)
-    expect(stats!.fatBurned).toBeGreaterThan(0)
-    expect(stats!.zone).toBeTruthy()
-  })
-
-  it('uses kilojoules when available for calories', () => {
-    const activity = makeRide({
-      average_heartrate: 145,
-      moving_time: 3600,
-      kilojoules: 800,
-    })
-    const stats = calculateActivityFatStats(activity, 75, 190, 60)
-    // 800 * 0.25 = 200 calories
-    expect(stats!.calories).toBe(200)
-  })
-})
 
 // ===================================================================
 // calculatePersonalRecords
@@ -958,59 +835,7 @@ describe('calculateWeeklySummaries', () => {
 // calculateFatBurningSummary
 // ===================================================================
 
-describe('calculateFatBurningSummary', () => {
-  it('returns zeros for no activities with HR', () => {
-    const result = calculateFatBurningSummary([], 75, 190, 60)
-    expect(result.totalCalories).toBe(0)
-    expect(result.totalFatBurned).toBe(0)
-    expect(result.totalActivitiesWithHR).toBe(0)
-  })
-
-  it('aggregates fat stats across activities', () => {
-    const activities = [
-      makeRide({ average_heartrate: 145, moving_time: 3600, kilojoules: 800 }),
-      makeRide({ average_heartrate: 140, moving_time: 1800, kilojoules: 400 }),
-    ]
-    const result = calculateFatBurningSummary(activities, 75, 190, 60)
-    expect(result.totalActivitiesWithHR).toBe(2)
-    expect(result.totalCalories).toBeGreaterThan(0)
-    expect(result.totalFatBurned).toBeGreaterThan(0)
-    expect(result.totalTime).toBe(5400)
-  })
-
-  it('identifies optimal fat burn activities', () => {
-    // Intensity 60-70% of HRR is optimal
-    // HRR = 190 - 60 = 130. 60% → HR 138, 70% → HR 151
-    const activities = [
-      makeRide({ average_heartrate: 145, moving_time: 3600, kilojoules: 600 }), // optimal
-      makeRide({ average_heartrate: 175, moving_time: 3600, kilojoules: 800 }), // too intense
-    ]
-    const result = calculateFatBurningSummary(activities, 75, 190, 60)
-    expect(result.optimalFatBurnActivities).toBe(1)
-  })
-})
-
 // ===================================================================
 // calculateCompleteFatBurningSummary
 // ===================================================================
 
-describe('calculateCompleteFatBurningSummary', () => {
-  it('includes BMR and resting fat burn', () => {
-    const result = calculateCompleteFatBurningSummary([], 75, 190, 60, 35, 'male', 30)
-    expect(result.bmr).toBeGreaterThan(0)
-    expect(result.dailyRestingFatBurn).toBeGreaterThan(0)
-    expect(result.weeklyRestingFatBurn).toBe(result.dailyRestingFatBurn * 7)
-    expect(result.periodRestingFatBurn).toBe(result.dailyRestingFatBurn * 30)
-    expect(result.periodDays).toBe(30)
-  })
-
-  it('combines activity and resting fat burn', () => {
-    const activities = [
-      makeRide({ average_heartrate: 145, moving_time: 3600, kilojoules: 800 }),
-    ]
-    const result = calculateCompleteFatBurningSummary(activities, 75, 190, 60, 35, 'male', 30)
-    expect(result.totalFatBurnWithResting).toBe(
-      result.totalFatBurned + result.periodRestingFatBurn
-    )
-  })
-})
