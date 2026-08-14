@@ -5,6 +5,7 @@ import { useDashboard, type ActivityGroup } from '~/lib/dashboard-context'
 import { formatDateFull } from '~/lib/chart-theme'
 import { calculateActivityScores } from '~/lib/performance'
 import { getScoreLabel, scoreLabelClasses, activityTypeClasses } from '~/lib/activities'
+import { rollup } from '~/lib/rollup'
 import { Pagination } from '~/components/Pagination'
 
 const ACTIVITIES_PAGE_SIZE = 25
@@ -55,33 +56,19 @@ function aggregateGroup(group: ActivityGroup, activities: StravaActivity[]): Mer
     .filter((a): a is StravaActivity => a != null)
     .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
 
-  const distance = groupActivities.reduce((sum, a) => sum + a.distance, 0)
-  const movingTime = groupActivities.reduce((sum, a) => sum + a.moving_time, 0)
-  const elevation = groupActivities.reduce((sum, a) => sum + a.total_elevation_gain, 0)
-
-  const wattsActivities = groupActivities.filter((a) => a.average_watts)
-  const avgWatts = wattsActivities.length > 0
-    ? wattsActivities.reduce((sum, a) => sum + (a.average_watts || 0), 0) / wattsActivities.length
-    : undefined
-
-  const hrActivities = groupActivities.filter((a) => a.average_heartrate)
-  const avgHR = hrActivities.length > 0
-    ? hrActivities.reduce((sum, a) => sum + (a.average_heartrate || 0), 0) / hrActivities.length
-    : undefined
-
-  const dates = groupActivities.map((a) => a.start_date_local)
+  const summary = rollup(groupActivities)
 
   return {
     type: 'group',
     group,
     activities: groupActivities,
-    distance,
-    movingTime,
-    elevation,
-    avgWatts,
-    avgHR,
-    date: dates[0] || '',
-    latestDate: dates[dates.length - 1] || '',
+    distance: summary?.distance ?? 0,
+    movingTime: summary?.movingTime ?? 0,
+    elevation: summary?.elevation ?? 0,
+    avgWatts: summary?.avgWatts,
+    avgHR: summary?.avgHeartrate,
+    date: summary?.earliest.start_date_local ?? '',
+    latestDate: summary?.latest.start_date_local ?? '',
   }
 }
 

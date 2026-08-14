@@ -25,6 +25,7 @@ import {
 import { useDashboard } from '~/lib/dashboard-context'
 import { calculateFitnessOverTime, estimateFTPHistory } from '~/lib/performance'
 import { calculateTSS, type TssThresholds } from '~/lib/tss'
+import { rollup } from '~/lib/rollup'
 import { chartTheme, tooltipStyle } from '~/lib/chart-theme'
 import { type StravaActivity } from '~/lib/strava'
 import {
@@ -430,32 +431,15 @@ function aggregateDay(activities: StravaActivity[], date: Date): DayActual | nul
     const ad = new Date(a.start_date_local || a.start_date)
     return isSameDay(ad, date)
   })
-  if (matches.length === 0) return null
-
-  const totalMovingTime = matches.reduce((s, a) => s + a.moving_time, 0)
-  const wattActs = matches.filter((a) => a.average_watts)
-  const npActs = matches.filter((a) => a.weighted_average_watts)
-  const hrActs = matches.filter((a) => a.average_heartrate)
-
-  const avgPower = wattActs.length
-    ? wattActs.reduce((s, a) => s + (a.average_watts! * a.moving_time), 0) /
-      wattActs.reduce((s, a) => s + a.moving_time, 0)
-    : null
-  const np = npActs.length
-    ? npActs.reduce((s, a) => s + (a.weighted_average_watts! * a.moving_time), 0) /
-      npActs.reduce((s, a) => s + a.moving_time, 0)
-    : null
-  const avgHr = hrActs.length
-    ? hrActs.reduce((s, a) => s + (a.average_heartrate! * a.moving_time), 0) /
-      hrActs.reduce((s, a) => s + a.moving_time, 0)
-    : null
+  const summary = rollup(matches)
+  if (!summary) return null
 
   return {
-    movingTimeMin: totalMovingTime / 60,
-    avgPower,
-    np,
-    avgHr,
-    distance: matches.reduce((s, a) => s + a.distance, 0),
+    movingTimeMin: summary.movingTime / 60,
+    avgPower: summary.avgWatts ?? null,
+    np: summary.normalizedWatts ?? null,
+    avgHr: summary.avgHeartrate ?? null,
+    distance: summary.distance,
     activities: matches,
   }
 }
