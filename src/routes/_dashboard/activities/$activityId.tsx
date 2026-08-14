@@ -1,8 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
 import { useDashboard } from '~/lib/dashboard-context'
-import { storage } from '~/lib/storage'
-import { fetchIntervalsActivityDetails } from '~/lib/server-functions'
 import { isIntervalsActivityId } from '~/lib/intervals'
 import {
   type ActivityDetailsJson,
@@ -13,9 +11,7 @@ import {
 } from '~/lib/strava'
 import {
   fetchCachedActivityDetails,
-  cacheActivityDetails,
   clearCachedActivityDetails,
-  upsertActivities,
   isSupabaseConfigured,
 } from '~/lib/storage/supabase-client'
 import { formatDateFull, chartTheme, tooltipStyle } from '~/lib/chart-theme'
@@ -50,7 +46,7 @@ function workoutTypeLabel(activityType: string, workoutType: number): string {
 
 function ActivityDetailPage() {
   const { activityId } = Route.useParams()
-  const { activities, athlete, weight } = useDashboard()
+  const { activities, sync } = useDashboard()
   const [details, setDetails] = useState<ActivityDetailsJson | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -60,34 +56,14 @@ function ActivityDetailPage() {
 
   // Details are only fetchable for intervals.icu activities; legacy Strava-era
   // activities rely entirely on the cached details from before the cutover.
+  //
+  // This used to be its own copy of the fetch-cache-patch pipeline, which wrote
+  // an estimated-watts patch to the database but left the in-memory set — and
+  // therefore every derived number in the session — reading the old value until
+  // a reload. The engine owns the whole pipeline now.
   async function fetchFromIntervals(id: number) {
-    if (!isIntervalsActivityId(id)) return null
-
-    const passphrase = await storage.auth.getPassphrase()
-    if (!passphrase) return null
-
-    const detailsJson = await fetchIntervalsActivityDetails({
-      data: { passphrase, activityId: id, riderWeight: weight },
-    })
-    if (!detailsJson) return null
-
-    setDetails(detailsJson)
-
-    if (isSupabaseConfigured()) {
-      cacheActivityDetails(id, detailsJson)
-
-      // Patch estimated watts onto the summary row so scores/TSS pick it up
-      // even when details were first fetched here rather than via Sync All.
-      if (detailsJson.power_estimated && detailsJson.estimated_avg_watts) {
-        const current = activities.find((a) => a.id === id)
-        if (current && !current.average_watts) {
-          upsertActivities(athlete.id, [
-            { ...current, average_watts: detailsJson.estimated_avg_watts },
-          ])
-        }
-      }
-    }
-
+    const detailsJson = await sync.ensureDetails(id)
+    if (detailsJson) setDetails(detailsJson)
     return detailsJson
   }
 

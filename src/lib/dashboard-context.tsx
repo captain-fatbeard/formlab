@@ -4,6 +4,7 @@ import { type TimeRange, type ActivityType, type Gender } from './storage/supaba
 import type { WeightEntry, ActivityGroup } from './storage/supabase-client'
 import type { TssThresholds, ThresholdSources } from './tss'
 import type { AthleteProfile } from './athlete-profile'
+import type { ActivitySync } from './sync/activity-sync'
 
 export type { TimeRange, ActivityType, Gender }
 export type { WeightEntry, ActivityGroup }
@@ -69,6 +70,10 @@ export interface DashboardContextType {
   /** FTP, its history and the thresholds — derived from the complete history,
    * so it does not move when the time-range or type filter changes. */
   profile: AthleteProfile
+  /** The ingestion engine. Pages that need details for one activity call
+   * `sync.ensureDetails` rather than running their own fetch-and-cache, so a
+   * patched power estimate reaches the live set and not just the database. */
+  sync: ActivitySync
 }
 
 export const DashboardContext = createContext<DashboardContextType | null>(null)
