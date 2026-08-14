@@ -7,7 +7,6 @@ import {
   getZoneForPower,
   calculateZoneDistribution,
   calculateTSS,
-  calculateFitnessOverTime,
   calculatePersonalRecords,
   estimateVO2max,
   getVO2maxCategory,
@@ -247,56 +246,6 @@ describe('calculateTSS (re-export from tss module)', () => {
 // ===================================================================
 // calculateFitnessOverTime
 // ===================================================================
-
-describe('calculateFitnessOverTime', () => {
-  const ftp200 = [{ date: '2020-01-01', ftp: 200 }]
-
-  it('returns empty for no trackable activities', () => {
-    expect(calculateFitnessOverTime([], ftp200)).toEqual([])
-    // A ride with no power and no HR is not trackable
-    expect(calculateFitnessOverTime([makeRide()], ftp200)).toEqual([])
-  })
-
-  it('returns data from earliest activity to today', () => {
-    const activities = [
-      makeRide({
-        average_watts: 200,
-        moving_time: 3600,
-        start_date_local: '2025-03-01T09:00:00',
-      }),
-    ]
-    const result = calculateFitnessOverTime(activities, ftp200)
-    expect(result.length).toBeGreaterThan(0)
-    expect(result[0].date).toBe('2025-03-01')
-    expect(result[0].tss).toBe(100)
-  })
-
-  it('CTL grows slowly while ATL spikes', () => {
-    const activities = [
-      makeRide({
-        average_watts: 200,
-        moving_time: 3600,
-        start_date_local: '2025-03-01T09:00:00',
-      }),
-    ]
-    const result = calculateFitnessOverTime(activities, ftp200)
-    const day1 = result[0]
-    // ATL should respond faster than CTL
-    expect(day1.atl).toBeGreaterThan(day1.ctl)
-  })
-
-  it('TSB is negative after hard effort (fatigue > fitness)', () => {
-    const activities = [
-      makeRide({
-        average_watts: 200,
-        moving_time: 3600,
-        start_date_local: '2025-03-01T09:00:00',
-      }),
-    ]
-    const result = calculateFitnessOverTime(activities, ftp200)
-    expect(result[0].tsb).toBeLessThan(0)
-  })
-})
 
 // ===================================================================
 // estimateVO2max

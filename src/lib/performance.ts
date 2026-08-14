@@ -1,7 +1,7 @@
 import { startOfWeek, addWeeks } from 'date-fns'
 import { type StravaActivity } from './strava'
 import { zoneColors, formatDateShort } from './chart-theme'
-import { calculateTSS as calculateTSSWithThresholds, classifySport, isRide, isRun, type TssThresholds } from './tss'
+import { calculateTSS as calculateTSSWithThresholds, isRide, isRun, type TssThresholds } from './tss'
 
 // FTP entry with effective date — FTP applies from this date until the next entry
 export interface FtpHistoryEntry {
@@ -115,20 +115,6 @@ export function estimateFTPHistory(activities: StravaActivity[]): FtpHistoryEntr
   return result
 }
 
-// Get the FTP value for a given date from FTP history
-export function getFTPForDate(date: string, ftpHistory: FtpHistoryEntry[]): number {
-  // ftpHistory must be sorted by date ascending
-  let ftp = ftpHistory[0]?.ftp || 0
-  for (const entry of ftpHistory) {
-    if (entry.date <= date) {
-      ftp = entry.ftp
-    } else {
-      break
-    }
-  }
-  return ftp
-}
-
 // Power zones based on FTP
 export interface PowerZone {
   name: string
@@ -186,90 +172,6 @@ export function calculateZoneDistribution(
 // Re-exported from ./tss for convenience — see that module for the full
 // sport-aware TSS pipeline (power, hrTSS, rTSS).
 export { calculateTSS } from './tss'
-
-// Calculate fitness (CTL), fatigue (ATL), and form (TSB)
-export interface FitnessData {
-  date: string
-  ctl: number // Chronic Training Load (fitness)
-  atl: number // Acute Training Load (fatigue)
-  tsb: number // Training Stress Balance (form)
-  tss: number // Daily TSS
-  ftp: number // FTP used for this date
-}
-
-export function calculateFitnessOverTime(
-  activities: StravaActivity[],
-  ftpHistory: FtpHistoryEntry[],
-  thresholds?: TssThresholds
-): FitnessData[] {
-  const trackedActivities = activities.filter((a) => {
-    const sport = classifySport(a)
-    if (sport === 'other') return false
-    // A reported intervals.icu load is enough on its own — calculateTSS prefers
-    // it over the averages anyway.
-    if (a.suffer_score) return true
-    if (sport === 'cycling') return Boolean(a.average_watts || a.average_heartrate)
-    return a.average_speed > 0 || Boolean(a.average_heartrate)
-  })
-
-  if (trackedActivities.length === 0 || ftpHistory.length === 0) return []
-
-  const dailyActivities: Record<string, StravaActivity[]> = {}
-  trackedActivities.forEach((activity) => {
-    const date = activity.start_date_local.split('T')[0]
-    if (!dailyActivities[date]) dailyActivities[date] = []
-    dailyActivities[date].push(activity)
-  })
-
-  // Start from earliest activity to build up CTL/ATL accurately
-  const earliest = trackedActivities
-    .map((a) => new Date(a.start_date_local))
-    .reduce((min, d) => (d < min ? d : min))
-  earliest.setHours(0, 0, 0, 0)
-
-  const today = new Date()
-  today.setHours(23, 59, 59, 999)
-
-  const sortedFtp = [...ftpHistory].sort((a, b) => a.date.localeCompare(b.date))
-
-  const result: FitnessData[] = []
-  let ctl = 0
-  let atl = 0
-
-  // Iterate through each day from earliest activity to today (inclusive)
-  for (let d = new Date(earliest); d <= today; d.setDate(d.getDate() + 1)) {
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    const ftp = getFTPForDate(dateStr, sortedFtp)
-
-    let tss = 0
-    if (dailyActivities[dateStr]) {
-      const dayThresholds: TssThresholds = thresholds
-        ? { ...thresholds, ftp }
-        : { ftp, cyclingLTHR: null, runningLTHR: null, runningThresholdPace: null, maxHR: 0, restingHR: 0 }
-      for (const activity of dailyActivities[dateStr]) {
-        tss += calculateTSSWithThresholds(activity, dayThresholds)
-      }
-    }
-
-    // Exponential weighted moving averages
-    ctl = ctl + (tss - ctl) / 42 // 42-day time constant
-    atl = atl + (tss - atl) / 7 // 7-day time constant
-    const tsb = ctl - atl
-
-    result.push({
-      date: dateStr,
-      // Keep one decimal: CTL moves by at most ctl/42 (~1.3) per day, so integer
-      // rounding makes a smooth ~1.3 decay look like a 2-point overnight jump.
-      ctl: Math.round(ctl * 10) / 10,
-      atl: Math.round(atl * 10) / 10,
-      tsb: Math.round(tsb * 10) / 10,
-      tss,
-      ftp,
-    })
-  }
-
-  return result
-}
 
 // Personal Records
 export interface PersonalRecord {

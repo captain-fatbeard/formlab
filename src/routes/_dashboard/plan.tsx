@@ -23,8 +23,8 @@ import {
   Legend,
 } from 'recharts'
 import { useDashboard } from '~/lib/dashboard-context'
-import { calculateFitnessOverTime, estimateFTPHistory } from '~/lib/performance'
-import { calculateTSS, type TssThresholds } from '~/lib/tss'
+import { fitnessSeries, loadBetween, type FitnessSeries } from '~/lib/fitness'
+import { type TssThresholds } from '~/lib/tss'
 import { rollup } from '~/lib/rollup'
 import { chartTheme, tooltipStyle } from '~/lib/chart-theme'
 import { type StravaActivity } from '~/lib/strava'
@@ -40,6 +40,11 @@ import {
 export const Route = createFileRoute('/_dashboard/plan')({
   component: PlanPage,
 })
+
+// Shown in the power targets when there isn't enough power data to estimate an
+// FTP yet. Display only — training load never uses it, so a wrong guess here
+// can't move CTL, ATL or a weekly total.
+const DEFAULT_FTP = 236
 
 type SessionType = 'z2' | 'rest' | 'opener' | 'test' | 'threshold' | 'vo2' | 'long' | 'tempo' | 'run' | 'tempo-run'
 
@@ -539,7 +544,7 @@ function summarizeWeek(
   weekStart: Date,
   today: Date,
   activities: StravaActivity[],
-  fitnessSeries: Array<{ date: string; ctl: number; atl: number; tsb: number }>,
+  fitness: FitnessSeries,
   thresholds: TssThresholds,
   phase: PlanPhase,
   dayOverrides?: Record<number, SessionType>,
@@ -582,22 +587,21 @@ function summarizeWeek(
   const startKey = format(subDays(weekStart, 1), 'yyyy-MM-dd')
   const endDate = weekEnd > today ? today : weekEnd
   const endKey = format(endDate, 'yyyy-MM-dd')
-  // fitnessSeries carries one-decimal CTL/ATL/TSB; the plan UI shows these as
+  // The curve carries one-decimal CTL/ATL/TSB; the plan UI shows these as
   // whole numbers, so round the snapshots here.
   const roundSnap = (p: { ctl: number; atl: number; tsb: number } | null | undefined) =>
     p ? { ctl: Math.round(p.ctl), atl: Math.round(p.atl), tsb: Math.round(p.tsb) } : null
-  const startSnap = roundSnap(fitnessSeries.find((p) => p.date === startKey))
-  const endSnap = roundSnap(
-    fitnessSeries.find((p) => p.date === endKey) ??
-      (fitnessSeries.length > 0 ? fitnessSeries[fitnessSeries.length - 1] : null),
-  )
+  const startSnap = roundSnap(fitness.days.find((p) => p.date === startKey))
+  const endSnap = roundSnap(fitness.days.find((p) => p.date === endKey) ?? fitness.latest)
 
   const weekActivities = activities.filter((a) => {
     const ad = new Date(a.start_date_local || a.start_date)
     return ad >= weekStart && ad < addDays(weekStart, 7)
   })
   const totalTimeMin = weekActivities.reduce((s, a) => s + a.moving_time, 0) / 60
-  const actualTSS = weekActivities.reduce((s, a) => s + calculateTSS(a, thresholds), 0)
+  // Read the load the curve actually used rather than re-summing it here — the
+  // two used to be computed from different FTPs and disagreed on screen.
+  const actualTSS = loadBetween(fitness, weekStart, addDays(weekStart, 7))
 
   return {
     weekStart,
@@ -616,13 +620,14 @@ function summarizeWeek(
 }
 
 function PlanPage() {
-  const { athlete, activities, stats, maxHR, restingHR, tssThresholds } = useDashboard()
+  const { athlete, activities, maxHR, restingHR, profile } = useDashboard()
 
-  const ftp = stats.ftp || 236
-  const thresholds = useMemo<TssThresholds>(
-    () => ({ ...tssThresholds, ftp }),
-    [tssThresholds, ftp]
-  )
+  // One thresholds object. This used to be a patched copy carrying a `|| 236`
+  // FTP fallback while the fitness curve beside it got the unpatched original,
+  // so the weekly total and the CTL curve scored the same ride differently.
+  const thresholds = profile.thresholds
+  // Display targets still need a number to show when FTP can't be estimated yet.
+  const ftp = profile.ftp || DEFAULT_FTP
 
   // Derived targets (from user's live FTP and HR)
   const z2HrCeiling = Math.round(restingHR + 0.7 * (maxHR - restingHR))
@@ -636,11 +641,7 @@ function PlanPage() {
   const atlTarget = 55
 
   // Full fitness history (for chart + current/baseline)
-  const fitnessSeries = useMemo(() => {
-    const history = estimateFTPHistory(activities)
-    if (history.length === 0) return []
-    return calculateFitnessOverTime(activities, history, tssThresholds)
-  }, [activities, tssThresholds])
+  const fitness = useMemo(() => fitnessSeries(activities, profile), [activities, profile])
 
   // Plan week — Monday of this week through Sunday
   const today = useMemo(() => {
@@ -770,8 +771,8 @@ function PlanPage() {
   // stable Monday→Sunday and doesn't flip mid-week as new rides shift ATL/TSB.
   const weekStartSnap = useMemo(() => {
     const key = format(subDays(weekStart, 1), 'yyyy-MM-dd')
-    return fitnessSeries.find((p) => p.date === key) ?? null
-  }, [fitnessSeries, weekStart])
+    return fitness.days.find((p) => p.date === key) ?? null
+  }, [fitness, weekStart])
   const phaseTsb = weekStartSnap?.tsb ?? null
   const phaseAtl = weekStartSnap?.atl ?? null
   const autoPhase: PlanPhase = detectPhase(phaseTsb, phaseAtl)
@@ -783,13 +784,13 @@ function PlanPage() {
   useEffect(() => {
     if (!overridesLoaded) return
     if (!athlete || !isSupabaseConfigured()) return
-    if (fitnessSeries.length === 0) return
+    if (fitness.days.length === 0) return
     const wsKey = format(weekStart, 'yyyy-MM-dd')
     if (wsKey in weekPhaseOverrides) return
     upsertPlanWeekPhase(athlete.id, wsKey, 'paused')
     setWeekPhaseOverrides((prev) => ({ ...prev, [wsKey]: 'paused' }))
     setPhaseSetting('paused')
-  }, [overridesLoaded, athlete, weekStart, weekPhaseOverrides, fitnessSeries.length])
+  }, [overridesLoaded, athlete, weekStart, weekPhaseOverrides, fitness.days.length])
 
   const isPaused = activePhase === 'paused'
 
@@ -813,12 +814,12 @@ function PlanPage() {
         weekStart,
         today,
         activities,
-        fitnessSeries,
+        fitness,
         thresholds,
         activePhase,
         dayOverridesForWeek(weekStart),
       ),
-    [weekStart, today, activities, fitnessSeries, thresholds, activePhase, dayOverrides],
+    [weekStart, today, activities, fitness, thresholds, activePhase, dayOverrides],
   )
   const planDays = currentWeek.days
   const baseline = currentWeek.startSnap
@@ -827,20 +828,20 @@ function PlanPage() {
   // Past weeks. Phase comes from the persisted per-week override if present;
   // otherwise auto-detected from TSB/ATL at the start of that week.
   const pastWeeks = useMemo(() => {
-    if (fitnessSeries.length === 0) return []
+    if (fitness.days.length === 0) return []
     const out: WeekSummary[] = []
     for (let i = 1; i <= 12; i++) {
       const ws = subDays(weekStart, i * 7)
       const wsKey = format(ws, 'yyyy-MM-dd')
       const snapKey = format(subDays(ws, 1), 'yyyy-MM-dd')
-      const snap = fitnessSeries.find((p) => p.date === snapKey)
+      const snap = fitness.days.find((p) => p.date === snapKey)
       const phase: PlanPhase =
         weekPhaseOverrides[wsKey] ?? detectPhase(snap?.tsb ?? null, snap?.atl ?? null)
       const summary = summarizeWeek(
         ws,
         today,
         activities,
-        fitnessSeries,
+        fitness,
         thresholds,
         phase,
         dayOverridesForWeek(ws),
@@ -848,13 +849,13 @@ function PlanPage() {
       if (summary.totalActivities > 0) out.push(summary)
     }
     return out
-  }, [weekStart, today, activities, fitnessSeries, thresholds, weekPhaseOverrides, dayOverrides])
+  }, [weekStart, today, activities, fitness, thresholds, weekPhaseOverrides, dayOverrides])
 
   // Trajectory: 14 days ending today
   const trajectoryData = useMemo(() => {
-    if (fitnessSeries.length === 0) return []
+    if (fitness.days.length === 0) return []
     const cutoff = format(subDays(today, 13), 'yyyy-MM-dd')
-    return fitnessSeries
+    return fitness.days
       .filter((p) => p.date >= cutoff)
       .map((p) => ({
         date: p.date,
@@ -864,7 +865,7 @@ function PlanPage() {
         tsb: Math.round(p.tsb),
         isWeek: p.date >= format(weekStart, 'yyyy-MM-dd'),
       }))
-  }, [fitnessSeries, today, weekStart])
+  }, [fitness, today, weekStart])
 
   // Current week adherence (from summary helper)
   const { adherencePct, sessionsLogged, scoredCount } = currentWeek
@@ -874,7 +875,7 @@ function PlanPage() {
   // Updates as activities land instead of staying frozen at the template estimate.
   const rollingEstTSS = Math.round(
     currentWeek.days.reduce((s, d) => {
-      if (d.actual) return s + d.actual.activities.reduce((x, a) => x + calculateTSS(a, thresholds), 0)
+      if (d.actual) return s + (fitness.dailyTss.get(format(d.date, 'yyyy-MM-dd')) ?? 0)
       return s + plannedSessionTSS(d.session)
     }, 0),
   )
@@ -1222,7 +1223,7 @@ function PlanPage() {
               {/* Plan Recommendations */}
               {(() => {
                 const currentCtl =
-                  fitnessSeries.length > 0 ? Math.round(fitnessSeries[fitnessSeries.length - 1].ctl) : null
+                  fitness.latest ? Math.round(fitness.latest.ctl) : null
                 const recs = buildPlanRecommendations(stats, derived, currentCtl)
                 const inLine = recs.length === 1 && recs[0].startsWith('Numbers line up')
                 return (
@@ -1371,7 +1372,9 @@ function PlanPage() {
 
                 {/* ACTUAL — shown when an activity exists */}
                 {actual && (() => {
-                  const dayTSS = Math.round(actual.activities.reduce((s, a) => s + calculateTSS(a, thresholds), 0))
+                  // From the curve's own daily load, so the number in this cell
+                  // and the CTL it produced can't be computed from different FTPs.
+                  const dayTSS = Math.round(fitness.dailyTss.get(format(date, 'yyyy-MM-dd')) ?? 0)
                   const plannedDayTSS = plannedSessionTSS(session)
                   return (
                     <div className="mt-1 pt-2 border-t border-border-subtle flex flex-col gap-1">

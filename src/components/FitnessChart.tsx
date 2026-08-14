@@ -11,7 +11,7 @@ import {
   Legend,
 } from 'recharts'
 import { type StravaActivity } from '~/lib/strava'
-import { calculateFitnessOverTime } from '~/lib/performance'
+import { fitnessSeries } from '~/lib/fitness'
 import { useDashboard } from '~/lib/dashboard-context'
 import { chartTheme, tooltipStyle, formatDateShort, formatDateFull } from '~/lib/chart-theme'
 import { RangeSelector } from './RangeSelector'
@@ -37,33 +37,23 @@ function getATLLevel(atl: number): { label: string; color: string } {
 
 export function FitnessChart({ activities }: FitnessChartProps) {
   const [days, setDays] = useState(30)
-  const { tssThresholds, profile } = useDashboard()
+  const { profile } = useDashboard()
 
-  // From the profile, so this chart's FTP history matches the one every other
-  // page uses rather than being re-estimated from whatever slice it was handed.
-  const ftpHistory = profile.ftpHistory
-
-  // Current FTP is the latest entry
-  const currentFtp = ftpHistory.length > 0 ? ftpHistory[ftpHistory.length - 1].ftp : null
-
-  // Calculate full history once — CTL/ATL build up from the earliest activity
-  const allFitnessData = useMemo(() => {
-    if (ftpHistory.length === 0) return []
-    return calculateFitnessOverTime(activities, ftpHistory, tssThresholds)
-  }, [activities, ftpHistory, tssThresholds])
+  // Full history once — CTL/ATL build up from the earliest activity.
+  const series = useMemo(() => fitnessSeries(activities, profile), [activities, profile])
 
   // Slice to the selected time range for display only
   const fitnessData = useMemo(() => {
-    if (days === 0) return allFitnessData
-    return allFitnessData.slice(-days)
-  }, [allFitnessData, days])
+    if (days === 0) return series.days
+    return series.days.slice(-days)
+  }, [series, days])
 
-  if (!currentFtp || fitnessData.length === 0) {
+  if (fitnessData.length === 0) {
     return (
       <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
         <h3 className="text-lg font-semibold mb-5 text-text-primary max-[480px]:text-base">Fitness & Form</h3>
         <div className="text-text-muted text-center py-16 text-[0.9rem]">
-          Need more rides with power data to calculate fitness trends.
+          Need activities with power or heart rate to calculate fitness trends.
         </div>
       </div>
     )
