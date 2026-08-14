@@ -19,6 +19,7 @@ import {
   isSupabaseConfigured,
 } from '~/lib/storage/supabase-client'
 import { formatDateFull, chartTheme, tooltipStyle } from '~/lib/chart-theme'
+import { activityTypeClasses } from '~/lib/activities'
 import { ActivityMap } from '~/components/ActivityMap'
 import {
   ComposedChart,
@@ -36,12 +37,6 @@ import {
 export const Route = createFileRoute('/_dashboard/activities/$activityId')({
   component: ActivityDetailPage,
 })
-
-const activityTypeClasses: Record<string, string> = {
-  ride: 'bg-ride-muted text-ride',
-  virtualride: 'bg-ride-muted text-ride',
-  run: 'bg-run-muted text-run',
-}
 
 const workoutTypeLabels: Record<string, Record<number, string>> = {
   Run: { 1: 'Race', 2: 'Long Run', 3: 'Workout' },
