@@ -4,8 +4,6 @@ import {
   format,
   addDays,
   startOfWeek,
-  isSameDay,
-  isToday,
   subDays,
   differenceInDays,
   parseISO,
@@ -23,11 +21,25 @@ import {
   Legend,
 } from 'recharts'
 import { useDashboard } from '~/lib/dashboard-context'
-import { fitnessSeries, loadBetween, type FitnessSeries } from '~/lib/fitness'
-import { type TssThresholds } from '~/lib/tss'
-import { rollup } from '~/lib/rollup'
+import { fitnessSeries } from '~/lib/fitness'
+import {
+  SESSION_CATALOG,
+  classifyDerivedPhase,
+  computeWeekStats,
+  detectPhase,
+  planRecommendations,
+  plannedSessionTSS,
+  shapeDrift,
+  summarizeWeek,
+  type DerivedPhase,
+  type FitVerdict,
+  type PlanPhase,
+  type PlanPhaseSetting,
+  type PlanSession,
+  type SessionType,
+  type WeekSummary,
+} from '~/lib/plan'
 import { chartTheme, tooltipStyle } from '~/lib/chart-theme'
-import { type StravaActivity } from '~/lib/strava'
 import {
   deletePlanDayOverride,
   fetchPlanDayOverrides,
@@ -46,67 +58,8 @@ export const Route = createFileRoute('/_dashboard/plan')({
 // can't move CTL, ATL or a weekly total.
 const DEFAULT_FTP = 236
 
-type SessionType = 'z2' | 'rest' | 'opener' | 'test' | 'threshold' | 'vo2' | 'long' | 'tempo' | 'run' | 'tempo-run'
-
-interface PlanSession {
-  type: SessionType
-  label: string
-  detail: string
-  duration: string
-  durationMinMin: number
-  durationMaxMin: number
-  /** acceptable power band as fraction of FTP — null if not power-constrained */
-  powerFloor: number | null
-  powerCeiling: number | null
-  /** if true, finishing below powerFloor is acceptable (e.g. Z1 on a recovery day) */
-  allowBelow: boolean
-}
-
-// Default session definition for each type, used when a day is overridden
-// to a different type than the template's default.
-const SESSION_CATALOG: Record<SessionType, PlanSession> = {
-  z2: { type: 'z2', label: 'Z2 Endurance', detail: 'Easy aerobic base', duration: '60–90 min', durationMinMin: 45, durationMaxMin: 100, powerFloor: 0.55, powerCeiling: 0.8, allowBelow: true },
-  rest: { type: 'rest', label: 'Rest', detail: 'Full off day', duration: '—', durationMinMin: 0, durationMaxMin: 30, powerFloor: null, powerCeiling: null, allowBelow: true },
-  opener: { type: 'opener', label: 'Opener', detail: 'Z2 with 3×1 min short openers', duration: '45 min', durationMinMin: 30, durationMaxMin: 60, powerFloor: 0.55, powerCeiling: 1.05, allowBelow: true },
-  test: { type: 'test', label: 'Test ride', detail: 'Climb portal or structured effort', duration: '60–90 min', durationMinMin: 45, durationMaxMin: 120, powerFloor: null, powerCeiling: null, allowBelow: true },
-  threshold: { type: 'threshold', label: 'Threshold', detail: '2×20 min at FTP', duration: '~60 min', durationMinMin: 40, durationMaxMin: 85, powerFloor: 0.7, powerCeiling: 1.05, allowBelow: false },
-  vo2: { type: 'vo2', label: 'VO2max', detail: '5×4 min at 110–115% FTP', duration: '~60 min', durationMinMin: 40, durationMaxMin: 85, powerFloor: 0.65, powerCeiling: 1.1, allowBelow: false },
-  long: { type: 'long', label: 'Long Z2', detail: 'Aerobic volume, flat or rolling', duration: '90–120 min', durationMinMin: 75, durationMaxMin: 150, powerFloor: 0.55, powerCeiling: 0.8, allowBelow: true },
-  tempo: { type: 'tempo', label: 'Tempo ride', detail: 'Steady upper-Z2 / Z3 — hilly Zwift routes, sustained climbs', duration: '90–180 min', durationMinMin: 60, durationMaxMin: 200, powerFloor: 0.7, powerCeiling: 0.92, allowBelow: false },
-  run: { type: 'run', label: 'Easy run', detail: 'Truly easy, conversational pace', duration: '30 min', durationMinMin: 20, durationMaxMin: 40, powerFloor: null, powerCeiling: null, allowBelow: true },
-  'tempo-run': { type: 'tempo-run', label: 'Tempo run', detail: 'Comfortably hard to hard — 80–85% max HR / Z3–Z4', duration: '30–40 min', durationMinMin: 25, durationMaxMin: 45, powerFloor: null, powerCeiling: null, allowBelow: false },
-}
-
-// Type categories used for the "weekly shape" check after day overrides.
-const INTENSITY_TYPES: SessionType[] = ['threshold', 'vo2', 'tempo', 'tempo-run']
-const EASY_TYPES: SessionType[] = ['z2', 'long', 'run']
-
-// Expected weekly counts per phase, derived from the default RECOVERY_PLAN
-// and BUILD_PLAN. The "shape" banner warns if the customized week drifts
-// far from these.
-const PHASE_WEEK_TARGETS: Record<PlanPhase, { intensity: number; easy: number; rest: number }> = {
-  recovery: { intensity: 0, easy: 4, rest: 1 },
-  build: { intensity: 2, easy: 3, rest: 2 },
-  paused: { intensity: 0, easy: 0, rest: 7 },
-}
-
-function countWeekShape(template: PlanSession[]): { intensity: number; easy: number; rest: number } {
-  let intensity = 0
-  let easy = 0
-  let rest = 0
-  for (const s of template) {
-    if (INTENSITY_TYPES.includes(s.type)) intensity++
-    else if (EASY_TYPES.includes(s.type)) easy++
-    else if (s.type === 'rest') rest++
-  }
-  return { intensity, easy, rest }
-}
-
-// Derived phase classification. Drives the displayed label/colors based on
-// the actual planned lineup, regardless of which template was originally
-// loaded. Still binary at the storage layer — this is purely cosmetic.
-type DerivedPhase = 'recovery' | 'build' | 'peak'
-
+// Presentation for each derived phase — the classification itself lives in
+// lib/plan/classify.
 const DERIVED_PHASE_META: Record<DerivedPhase, { title: string; tone: string; description: string }> = {
   recovery: {
     title: 'Recovery Week',
@@ -131,250 +84,8 @@ const PAUSED_WEEK_META = {
   description: 'Plan on hold — no sessions scheduled, nothing counts as missed. Rides still record TSS and fitness.',
 }
 
-// Hard-intensity types (threshold/VO2) drive Peak classification. Tempo-run is
-// counted as "non-easy" for polarization and shape, but doesn't on its own bump
-// a week to Peak — three tempo runs is still a Build week, three threshold/VO2
-// days is a Peak week.
-const HARD_INTENSITY_TYPES: SessionType[] = ['threshold', 'vo2']
-
-function classifyDerivedPhase(template: PlanSession[]): DerivedPhase {
-  const hardCount = template.filter((s) => HARD_INTENSITY_TYPES.includes(s.type)).length
-  if (hardCount >= 3) return 'peak'
-  if (hardCount >= 1) return 'build'
-  return 'recovery'
-}
-
-// Estimated training stress per minute by session type. Coarse — uses
-// single-IF approximations rather than per-interval modeling. Good enough
-// to get a weekly TSS ballpark in the Stats panel.
-// Calibrated 2026-05-02 against the user's actual upper-Z2 / IF~0.88 threshold
-// pattern — see TSS analysis in conversation history. Old values were keyed
-// to band-floor IFs and consistently undershot real accumulation by 30–55%.
-const TSS_PER_MIN: Record<SessionType, number> = {
-  rest: 0,
-  z2: 0.75,
-  long: 0.7,
-  opener: 0.7,
-  run: 0.7,
-  test: 1.0,
-  tempo: 1.05,
-  threshold: 1.2,
-  vo2: 1.3,
-  'tempo-run': 1.4,
-}
-
-function plannedSessionTSS(s: PlanSession): number {
-  const minutes = (s.durationMinMin + s.durationMaxMin) / 2
-  return Math.round(minutes * TSS_PER_MIN[s.type])
-}
-
-function plannedSessionMinutes(s: PlanSession): number {
-  return (s.durationMinMin + s.durationMaxMin) / 2
-}
-
-interface WeekStats {
-  totalMinutes: number
-  totalTSS: number
-  sessions: number // non-rest days
-  rest: number
-  intensity: number
-  easy: number
-  easyMinutes: number
-  intensityMinutes: number
-}
-
-// Healthy weekly intensity/rest ranges per derived phase. TSS targets are
-// computed dynamically from the rider's current CTL — see buildPlanRecommendations.
-const PHASE_TARGETS: Record<DerivedPhase, {
-  intensityMin: number
-  intensityMax: number
-  restMin: number
-  intensityPctMax: number // share of riding time that should be hard
-}> = {
-  recovery: { intensityMin: 0, intensityMax: 0, restMin: 1, intensityPctMax: 5 },
-  build: { intensityMin: 1, intensityMax: 2, restMin: 1, intensityPctMax: 25 },
-  peak: { intensityMin: 2, intensityMax: 3, restMin: 1, intensityPctMax: 30 },
-}
-
-// TSS bands as multiples of weekly maintenance (CTL × 7). Recovery sits below
-// maintenance (so CTL drops), build is around maintenance, peak slightly above.
-const PHASE_TSS_FACTORS: Record<DerivedPhase, { min: number; max: number }> = {
-  recovery: { min: 0.6, max: 0.85 },
-  build: { min: 0.95, max: 1.25 },
-  peak: { min: 1.15, max: 1.55 },
-}
-
-// Absolute fallback ranges when no CTL data is available (new account etc).
-const PHASE_TSS_FALLBACK: Record<DerivedPhase, { min: number; max: number }> = {
-  recovery: { min: 150, max: 320 },
-  build: { min: 300, max: 500 },
-  peak: { min: 450, max: 700 },
-}
-
-function buildPlanRecommendations(
-  stats: WeekStats,
-  phase: DerivedPhase,
-  ctl: number | null,
-): string[] {
-  const recs: string[] = []
-  const t = PHASE_TARGETS[phase]
-  const totalNonRest = stats.easyMinutes + stats.intensityMinutes
-  const intensityPct = totalNonRest > 0 ? (stats.intensityMinutes / totalNonRest) * 100 : 0
-
-  // Personalize TSS bounds against the rider's current CTL when available.
-  const maintenance = ctl ? Math.round(ctl * 7) : null
-  const factors = PHASE_TSS_FACTORS[phase]
-  const fallback = PHASE_TSS_FALLBACK[phase]
-  const tssMin = maintenance ? Math.round(maintenance * factors.min) : fallback.min
-  const tssMax = maintenance ? Math.round(maintenance * factors.max) : fallback.max
-  const ctlNote = maintenance ? ` (maintenance ≈ ${maintenance} at CTL ${ctl})` : ''
-
-  const tssLow = stats.totalTSS < tssMin
-  const tssHigh = stats.totalTSS > tssMax
-  const intensityHigh = stats.intensity > t.intensityMax
-  const intensityLow = stats.intensity < t.intensityMin
-  const polarizationOff = intensityPct > t.intensityPctMax && stats.intensity > 0
-
-  // Combined situations first — say it as one coherent fix instead of three
-  // overlapping nags pointing at the same problem.
-  if (intensityHigh && tssLow) {
-    recs.push(
-      `${stats.intensity} hard days but only ${stats.totalTSS} TSS — heavy on intensity, light on volume. Swap one threshold/VO2 for a long Z2: drops you to a polarized 80/20 mix and lifts weekly TSS toward target ${tssMin}–${tssMax}${ctlNote} in one move.`,
-    )
-  } else if (intensityHigh && polarizationOff) {
-    recs.push(
-      `${stats.intensity} hard days = ${Math.round(intensityPct)}% of riding time at intensity (above the ~80/20 norm). Swap one threshold/VO2 for endurance.`,
-    )
-  } else if (intensityHigh) {
-    recs.push(
-      `${stats.intensity} intensity days is heavy for a ${phase} week (typical ${t.intensityMin}${t.intensityMax > t.intensityMin ? `–${t.intensityMax}` : ''}). Swap one for endurance to protect recovery.`,
-    )
-  } else if (intensityLow && tssLow) {
-    recs.push(
-      `No intensity yet and only ${stats.totalTSS} TSS — looks like a recovery week, not a ${phase}. Either lock it in as Recovery (drop a session) or add a threshold/VO2 day to hit ${tssMin}+ TSS${ctlNote}.`,
-    )
-  } else if (intensityLow) {
-    recs.push(
-      `Only ${stats.intensity} intensity ${stats.intensity === 1 ? 'day' : 'days'} — a ${phase} week typically has ${t.intensityMin}${t.intensityMax > t.intensityMin ? `–${t.intensityMax}` : ''}. Swap a Z2 day for a Threshold or VO2max session.`,
-    )
-  } else if (tssLow) {
-    const gap = tssMin - stats.totalTSS
-    recs.push(
-      `Weekly TSS ${stats.totalTSS} is light for a ${phase} week — target ${tssMin}–${tssMax}${ctlNote}. Add ~${gap} TSS by extending a Z2 session or adding a long ride.`,
-    )
-  } else if (tssHigh) {
-    recs.push(
-      `Weekly TSS ${stats.totalTSS} is high for a ${phase} week — target ${tssMin}–${tssMax}${ctlNote}. Watch ATL; drop one session by 15–30 min if fatigue piles up.`,
-    )
-  } else if (polarizationOff) {
-    // Intensity count is fine but the time-share is still off — tempo runs
-    // can land you here.
-    recs.push(
-      `${Math.round(intensityPct)}% of riding time is hard — above the ~80/20 polarized norm. Lengthen the easy days rather than cutting intensity.`,
-    )
-  }
-
-  if (stats.rest < t.restMin) {
-    recs.push('No rest day this week. Schedule at least one full off-day so adaptation can happen.')
-  }
-
-  if (recs.length === 0) {
-    recs.push(`Numbers line up with a ${phase} week. Stick to the schedule.`)
-  }
-
-  return recs
-}
-
-function computeWeekStats(template: PlanSession[]): WeekStats {
-  let totalMinutes = 0
-  let totalTSS = 0
-  let sessions = 0
-  let rest = 0
-  let intensity = 0
-  let easy = 0
-  let easyMinutes = 0
-  let intensityMinutes = 0
-  for (const s of template) {
-    const min = plannedSessionMinutes(s)
-    totalMinutes += min
-    totalTSS += plannedSessionTSS(s)
-    if (s.type === 'rest') {
-      rest++
-    } else {
-      sessions++
-      if (INTENSITY_TYPES.includes(s.type)) {
-        intensity++
-        intensityMinutes += min
-      } else {
-        easy++
-        easyMinutes += min
-      }
-    }
-  }
-  return {
-    totalMinutes,
-    totalTSS,
-    sessions,
-    rest,
-    intensity,
-    easy,
-    easyMinutes,
-    intensityMinutes,
-  }
-}
-
-const RECOVERY_PLAN: PlanSession[] = [
-  { type: 'z2', label: 'Z2 Endurance', detail: 'Easy aerobic base, no surges', duration: '60–75 min', durationMinMin: 45, durationMaxMin: 85, powerFloor: 0.5, powerCeiling: 0.8, allowBelow: true },
-  { type: 'z2', label: 'Z2 Endurance', detail: 'Easy aerobic base, no surges', duration: '60–75 min', durationMinMin: 45, durationMaxMin: 85, powerFloor: 0.5, powerCeiling: 0.8, allowBelow: true },
-  { type: 'z2', label: 'Z2 Endurance', detail: 'Easy aerobic base, no surges', duration: '60–75 min', durationMinMin: 45, durationMaxMin: 85, powerFloor: 0.5, powerCeiling: 0.8, allowBelow: true },
-  { type: 'z2', label: 'Z2 Endurance', detail: 'Easy aerobic base, no surges', duration: '60–75 min', durationMinMin: 45, durationMaxMin: 85, powerFloor: 0.5, powerCeiling: 0.8, allowBelow: true },
-  { type: 'rest', label: 'Rest', detail: 'Full off day', duration: '—', durationMinMin: 0, durationMaxMin: 30, powerFloor: null, powerCeiling: null, allowBelow: true },
-  { type: 'opener', label: 'Opener', detail: 'Z2 with 3×1 min short openers', duration: '45 min', durationMinMin: 30, durationMaxMin: 60, powerFloor: 0.55, powerCeiling: 1.05, allowBelow: true },
-  { type: 'test', label: 'Test ride', detail: 'Climb portal or structured effort if legs feel snappy', duration: '60–90 min', durationMinMin: 45, durationMaxMin: 120, powerFloor: null, powerCeiling: null, allowBelow: true },
-]
-
-const BUILD_PLAN: PlanSession[] = [
-  { type: 'z2', label: 'Z2 Endurance', detail: 'Easy aerobic base', duration: '60–90 min', durationMinMin: 45, durationMaxMin: 100, powerFloor: 0.55, powerCeiling: 0.8, allowBelow: true },
-  { type: 'threshold', label: 'Threshold', detail: '2×20 min at FTP', duration: '~60 min', durationMinMin: 40, durationMaxMin: 85, powerFloor: 0.7, powerCeiling: 1.05, allowBelow: false },
-  { type: 'z2', label: 'Z2 Endurance', detail: 'Easy aerobic base', duration: '60–90 min', durationMinMin: 45, durationMaxMin: 100, powerFloor: 0.55, powerCeiling: 0.8, allowBelow: true },
-  { type: 'rest', label: 'Rest or easy spin', detail: 'Full rest, or 30–45 min Z1', duration: '0–45 min', durationMinMin: 0, durationMaxMin: 50, powerFloor: null, powerCeiling: 0.6, allowBelow: true },
-  { type: 'vo2', label: 'VO2max', detail: '5×4 min at 110–115% FTP', duration: '~60 min', durationMinMin: 40, durationMaxMin: 85, powerFloor: 0.65, powerCeiling: 1.1, allowBelow: false },
-  { type: 'long', label: 'Long Z2', detail: 'Aerobic volume, flat or rolling', duration: '90–120 min', durationMinMin: 75, durationMaxMin: 150, powerFloor: 0.55, powerCeiling: 0.8, allowBelow: true },
-  { type: 'rest', label: 'Rest', detail: 'Full off day', duration: '—', durationMinMin: 0, durationMaxMin: 30, powerFloor: null, powerCeiling: null, allowBelow: true },
-]
-
-// A paused week schedules nothing — every day is an unscored off day. Any
-// riding still records TSS/fitness; it just isn't judged against a plan.
-const PAUSED_PLAN: PlanSession[] = Array.from({ length: 7 }, () => ({
-  type: 'rest' as SessionType,
-  label: 'Paused',
-  detail: 'Plan on hold — ride if you feel like it',
-  duration: '—',
-  durationMinMin: 0,
-  durationMaxMin: 0,
-  powerFloor: null,
-  powerCeiling: null,
-  allowBelow: true,
-}))
-
-type PlanPhase = 'recovery' | 'build' | 'paused'
-type PlanPhaseSetting = 'auto' | PlanPhase
-
 const PHASE_STORAGE_KEY = 'formlab:plan-phase'
 const PLAN_START_STORAGE_KEY = 'formlab:plan-start-date'
-
-/**
- * Recovery when form is still negative OR fatigue is still high.
- * Build only once both have recovered.
- *   - TSB < −3: form hasn't returned to neutral
- *   - ATL ≥ 65: fatigue still in "Heavy" territory
- */
-function detectPhase(tsb: number | null, atl: number | null): PlanPhase {
-  if (tsb === null) return 'build'
-  if (tsb < -3) return 'recovery'
-  if (atl !== null && atl >= 65) return 'recovery'
-  return 'build'
-}
 
 const PHASE_META: Record<PlanPhase, { title: string; goalLabel: string; goalDetail: string }> = {
   recovery: {
@@ -407,8 +118,6 @@ const SESSION_COLORS: Record<SessionType, { bg: string; text: string; border: st
   'tempo-run': { bg: 'bg-lime-500/10', text: 'text-lime-300', border: 'border-lime-500/30', dot: 'bg-lime-400' },
 }
 
-type FitVerdict = 'on-target' | 'below' | 'above' | 'over-duration' | 'under-duration' | 'rest-skipped' | 'pending' | 'none' | 'future' | 'paused'
-
 const FIT_META: Record<FitVerdict, { label: string; tone: string; positive: boolean }> = {
   'paused': { label: 'Paused', tone: 'text-text-muted bg-bg-tertiary border-border-subtle', positive: true },
   'on-target': { label: 'On target', tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30', positive: true },
@@ -420,60 +129,6 @@ const FIT_META: Record<FitVerdict, { label: string; tone: string; positive: bool
   'pending': { label: 'Pending', tone: 'text-accent bg-accent/10 border-accent/30', positive: true },
   'none': { label: 'Missed', tone: 'text-neutral-400 bg-neutral-500/10 border-neutral-500/30', positive: false },
   'future': { label: 'Upcoming', tone: 'text-text-muted bg-bg-tertiary border-border-subtle', positive: true },
-}
-
-interface DayActual {
-  movingTimeMin: number
-  avgPower: number | null
-  np: number | null
-  avgHr: number | null
-  distance: number
-  activities: StravaActivity[]
-}
-
-function aggregateDay(activities: StravaActivity[], date: Date): DayActual | null {
-  const matches = activities.filter((a) => {
-    const ad = new Date(a.start_date_local || a.start_date)
-    return isSameDay(ad, date)
-  })
-  const summary = rollup(matches)
-  if (!summary) return null
-
-  return {
-    movingTimeMin: summary.movingTime / 60,
-    avgPower: summary.avgWatts ?? null,
-    np: summary.normalizedWatts ?? null,
-    avgHr: summary.avgHeartrate ?? null,
-    distance: summary.distance,
-    activities: matches,
-  }
-}
-
-function computeFit(session: PlanSession, actual: DayActual | null, ftp: number): FitVerdict {
-  // Rest day
-  if (session.type === 'rest') {
-    if (!actual) return 'on-target'
-    // Short easy spin counts as compliant rest
-    if (actual.movingTimeMin <= 30 && (actual.avgPower ?? 0) < ftp * 0.5) return 'on-target'
-    return 'rest-skipped'
-  }
-
-  // Other sessions: need an activity
-  if (!actual) return 'none'
-
-  // Duration checks
-  if (actual.movingTimeMin > session.durationMaxMin) return 'over-duration'
-  if (actual.movingTimeMin < session.durationMinMin) return 'under-duration'
-
-  // Power checks (when constrained)
-  if (session.powerCeiling !== null && actual.avgPower !== null) {
-    if (actual.avgPower > ftp * session.powerCeiling) return 'above'
-  }
-  if (session.powerFloor !== null && actual.avgPower !== null) {
-    if (actual.avgPower < ftp * session.powerFloor) return 'below'
-  }
-
-  return 'on-target'
 }
 
 function formatDuration(mins: number): string {
@@ -516,117 +171,14 @@ function targetPowerLabel(
   }
 }
 
-interface PlanDay {
-  session: PlanSession
-  date: Date
-  actual: DayActual | null
-  verdict: FitVerdict
-  isToday: boolean
-  isPastOrToday: boolean
-}
-
-interface WeekSummary {
-  weekStart: Date
-  weekEnd: Date
-  phase: PlanPhase
-  days: PlanDay[]
-  adherencePct: number
-  sessionsLogged: number
-  scoredCount: number
-  startSnap: { ctl: number; atl: number; tsb: number } | null
-  endSnap: { ctl: number; atl: number; tsb: number } | null
-  totalTimeMin: number
-  totalActivities: number
-  actualTSS: number
-}
-
-function summarizeWeek(
-  weekStart: Date,
-  today: Date,
-  activities: StravaActivity[],
-  fitness: FitnessSeries,
-  thresholds: TssThresholds,
-  phase: PlanPhase,
-  dayOverrides?: Record<number, SessionType>,
-): WeekSummary {
-  const ftp = thresholds.ftp
-  const paused = phase === 'paused'
-  const baseTemplate = paused ? PAUSED_PLAN : phase === 'recovery' ? RECOVERY_PLAN : BUILD_PLAN
-  // Day overrides don't apply to paused weeks — nothing is scheduled.
-  const template =
-    dayOverrides && !paused
-      ? baseTemplate.map((s, i) =>
-          i in dayOverrides ? SESSION_CATALOG[dayOverrides[i]] : s,
-        )
-      : baseTemplate
-
-  const days: PlanDay[] = template.map((session, i) => {
-    const date = addDays(weekStart, i)
-    const isPastOrToday = date <= today
-    const thisDayIsToday = isToday(date)
-    const actual = isPastOrToday ? aggregateDay(activities, date) : null
-    let verdict: FitVerdict
-    if (paused) verdict = 'paused'
-    else if (!isPastOrToday) verdict = 'future'
-    else if (thisDayIsToday && !actual && session.type !== 'rest') verdict = 'pending'
-    else verdict = computeFit(session, actual, ftp)
-    return { session, date, actual, verdict, isToday: thisDayIsToday, isPastOrToday }
-  })
-
-  // Paused weeks score nothing — riding isn't "rest skipped", skipping isn't "missed".
-  const scored = paused ? [] : days.filter((d) => d.isPastOrToday && d.verdict !== 'pending')
-  const onPlan = scored.filter((d) => {
-    if (d.verdict === 'on-target' || d.verdict === 'under-duration') return true
-    if (d.verdict === 'below') return d.session.allowBelow
-    return false
-  }).length
-  const adherencePct = scored.length > 0 ? Math.round((onPlan / scored.length) * 100) : 0
-  const sessionsLogged = scored.filter((d) => d.actual !== null || d.session.type === 'rest').length
-
-  const weekEnd = addDays(weekStart, 6)
-  const startKey = format(subDays(weekStart, 1), 'yyyy-MM-dd')
-  const endDate = weekEnd > today ? today : weekEnd
-  const endKey = format(endDate, 'yyyy-MM-dd')
-  // The curve carries one-decimal CTL/ATL/TSB; the plan UI shows these as
-  // whole numbers, so round the snapshots here.
-  const roundSnap = (p: { ctl: number; atl: number; tsb: number } | null | undefined) =>
-    p ? { ctl: Math.round(p.ctl), atl: Math.round(p.atl), tsb: Math.round(p.tsb) } : null
-  const startSnap = roundSnap(fitness.days.find((p) => p.date === startKey))
-  const endSnap = roundSnap(fitness.days.find((p) => p.date === endKey) ?? fitness.latest)
-
-  const weekActivities = activities.filter((a) => {
-    const ad = new Date(a.start_date_local || a.start_date)
-    return ad >= weekStart && ad < addDays(weekStart, 7)
-  })
-  const totalTimeMin = weekActivities.reduce((s, a) => s + a.moving_time, 0) / 60
-  // Read the load the curve actually used rather than re-summing it here — the
-  // two used to be computed from different FTPs and disagreed on screen.
-  const actualTSS = loadBetween(fitness, weekStart, addDays(weekStart, 7))
-
-  return {
-    weekStart,
-    weekEnd,
-    phase,
-    days,
-    adherencePct,
-    sessionsLogged,
-    scoredCount: scored.length,
-    startSnap,
-    endSnap,
-    totalTimeMin,
-    totalActivities: weekActivities.length,
-    actualTSS,
-  }
-}
-
 function PlanPage() {
   const { athlete, activities, maxHR, restingHR, profile } = useDashboard()
 
-  // One thresholds object. This used to be a patched copy carrying a `|| 236`
-  // FTP fallback while the fitness curve beside it got the unpatched original,
-  // so the weekly total and the CTL curve scored the same ride differently.
-  const thresholds = profile.thresholds
-  // Display targets still need a number to show when FTP can't be estimated yet.
+  // One FTP for everything on this page. It used to be a patched copy carrying
+  // a `|| 236` fallback for the weekly total while the fitness curve beside it
+  // got the unpatched original, so the two scored the same ride differently.
+  // Training load now comes from profile.thresholds via the curve; this number
+  // only sizes the displayed targets and the plan-fit verdicts.
   const ftp = profile.ftp || DEFAULT_FTP
 
   // Derived targets (from user's live FTP and HR)
@@ -810,16 +362,16 @@ function PlanPage() {
   // Current week (uses user-selected phase)
   const currentWeek = useMemo(
     () =>
-      summarizeWeek(
+      summarizeWeek({
         weekStart,
         today,
         activities,
         fitness,
-        thresholds,
-        activePhase,
-        dayOverridesForWeek(weekStart),
-      ),
-    [weekStart, today, activities, fitness, thresholds, activePhase, dayOverrides],
+        ftp,
+        phase: activePhase,
+        dayOverrides: dayOverridesForWeek(weekStart),
+      }),
+    [weekStart, today, activities, fitness, ftp, activePhase, dayOverrides],
   )
   const planDays = currentWeek.days
   const baseline = currentWeek.startSnap
@@ -837,19 +389,19 @@ function PlanPage() {
       const snap = fitness.days.find((p) => p.date === snapKey)
       const phase: PlanPhase =
         weekPhaseOverrides[wsKey] ?? detectPhase(snap?.tsb ?? null, snap?.atl ?? null)
-      const summary = summarizeWeek(
-        ws,
+      const summary = summarizeWeek({
+        weekStart: ws,
         today,
         activities,
         fitness,
-        thresholds,
+        ftp,
         phase,
-        dayOverridesForWeek(ws),
-      )
+        dayOverrides: dayOverridesForWeek(ws),
+      })
       if (summary.totalActivities > 0) out.push(summary)
     }
     return out
-  }, [weekStart, today, activities, fitness, thresholds, weekPhaseOverrides, dayOverrides])
+  }, [weekStart, today, activities, fitness, ftp, weekPhaseOverrides, dayOverrides])
 
   // Trajectory: 14 days ending today
   const trajectoryData = useMemo(() => {
@@ -1224,8 +776,8 @@ function PlanPage() {
               {(() => {
                 const currentCtl =
                   fitness.latest ? Math.round(fitness.latest.ctl) : null
-                const recs = buildPlanRecommendations(stats, derived, currentCtl)
-                const inLine = recs.length === 1 && recs[0].startsWith('Numbers line up')
+                const recs = planRecommendations(stats, derived, currentCtl)
+                const inLine = recs.length === 1 && recs[0].kind === 'on-plan'
                 return (
                   <div
                     className={`rounded-[var(--radius-md)] p-3 mb-4 border ${
@@ -1245,14 +797,14 @@ function PlanPage() {
                       )}
                     </div>
                     <ol className="flex flex-col gap-1.5 list-decimal list-inside">
-                      {recs.map((r, i) => (
+                      {recs.map((r) => (
                         <li
-                          key={i}
+                          key={r.kind}
                           className={`text-xs leading-relaxed marker:text-text-muted ${
                             inLine ? 'text-success' : 'text-text-secondary'
                           }`}
                         >
-                          {r}
+                          {r.message}
                         </li>
                       ))}
                     </ol>
@@ -1267,18 +819,12 @@ function PlanPage() {
 
         {(() => {
           if (isPaused) return null
-          const shape = countWeekShape(planDays.map((d) => d.session))
-          const target = PHASE_WEEK_TARGETS[activePhase]
-          const issues: string[] = []
-          if (shape.intensity > target.intensity + 1)
-            issues.push(`${shape.intensity} intensity days (template ${target.intensity})`)
-          if (shape.intensity < target.intensity - 1)
-            issues.push(`${shape.intensity} intensity days (template ${target.intensity})`)
-          if (shape.rest > target.rest + 1)
-            issues.push(`${shape.rest} rest days (template ${target.rest})`)
-          if (shape.rest < target.rest - 1)
-            issues.push(`${shape.rest} rest days (template ${target.rest})`)
-          if (issues.length === 0) return null
+          const drift = shapeDrift(planDays.map((d) => d.session), activePhase)
+            .filter((d) => d.dimension !== 'easy')
+          if (drift.length === 0) return null
+          const issues = drift.map(
+            (d) => `${d.actual} ${d.dimension} days (template ${d.expected})`
+          )
           return (
             <div className="bg-warning-muted border border-warning/30 rounded-[var(--radius-md)] p-3 mb-4 text-xs text-warning leading-relaxed">
               Weekly shape drift: {issues.join(' · ')}. Adjust day types to bring it back in line with a {activePhase} week.
