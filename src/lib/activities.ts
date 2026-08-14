@@ -2,15 +2,27 @@
 // existing import sites keep working. Don't add a second definition.
 export { isRide, isRun } from './tss'
 
-/** Get a human-readable score label from a numeric ride score.
- * Scores are TSS-like training load, so bands follow TSS semantics:
- * ~100 ≈ one hour at threshold. */
-export function getScoreLabel(score: number): string {
-  if (score >= 300) return 'Epic'
-  if (score >= 200) return 'Hard'
-  if (score >= 120) return 'Solid'
-  if (score >= 60) return 'Moderate'
-  return 'Easy'
+/**
+ * How big a day was, in training load. Scores are TSS-like, so the bands follow
+ * TSS semantics: ~100 ≈ one hour at threshold.
+ *
+ * The single definition of these bands. The activity list badges rides with
+ * them and the training calendar shades days with them, so a colour on the
+ * calendar means the same thing as the badge on the list.
+ */
+export const SCORE_BANDS = [
+  { upTo: 60, label: 'Easy' },
+  { upTo: 120, label: 'Moderate' },
+  { upTo: 200, label: 'Solid' },
+  { upTo: 300, label: 'Hard' },
+  { upTo: Infinity, label: 'Epic' },
+] as const
+
+export type ScoreLabel = (typeof SCORE_BANDS)[number]['label']
+
+/** Get a human-readable score label from a numeric ride score. */
+export function getScoreLabel(score: number): ScoreLabel {
+  return (SCORE_BANDS.find((b) => score < b.upTo) ?? SCORE_BANDS[SCORE_BANDS.length - 1]).label
 }
 
 /** CSS classes for score label badges */

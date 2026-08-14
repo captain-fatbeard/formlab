@@ -5,6 +5,7 @@ import { useDashboard } from '~/lib/dashboard-context'
 import { fitnessSeries } from '~/lib/fitness'
 import {
   DAY_LABELS,
+  LEVEL_LABELS,
   buildActivityCalendar,
   type CalendarDay,
   type CalendarMetric,
@@ -21,24 +22,19 @@ interface ActivityCalendarProps {
  * surface. Ordinal checks pass: monotone L, adjacent ΔL ≥ 0.06, dark end above
  * the contrast floor against both the card and the empty-day tone.
  *
- * Six steps rather than four. With four, the top band covered everything above
- * the 75th percentile, so a 160 km epic and a 50 km ride drew the same colour.
- * The extra steps only help paired with the tail-weighted cutoffs in
- * LEVEL_QUANTILES — more bands over a flat split would just have subdivided the
- * ordinary days.
- *
- * The near-white top is deliberate and depends on that rarity. At a quarter of
- * all days it read as "selected" and lost the teal identity; at the top 5% it
- * reads as "that was the big one", which is the signal wanted.
+ * One step per band in LOAD_BANDS, spread as wide as the checks allow. The
+ * spread is the whole job: these steps carry the difference between an easy
+ * spin and an epic, and anything tighter collapses the mid-range into mush at
+ * cell size.
  *
  * Level 0 is a recessive surface tone, not a ramp step: an empty day is absence
- * of data, not the smallest amount of it.
+ * of data, not the smallest amount of it. Easy sits deliberately close to it —
+ * an easy day genuinely is barely more than a rest day.
  */
 const LEVEL_FILL = [
   'var(--color-bg-tertiary)',
   '#115e59',
   '#0d9488',
-  '#14b8a6',
   '#2dd4bf',
   '#5eead4',
   '#ccfbf1',
@@ -272,13 +268,16 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
             </div>
           </div>
 
-          {/* Legend */}
-          <div className="flex items-center gap-1.5 ml-[34px] mt-1">
-            <span className="text-[0.6rem] text-text-muted mr-1">Less</span>
+          {/* Legend. Named bands rather than "Less → More": the steps are fixed
+              sizes, so they can say what they mean — and Easy/Moderate/Solid/
+              Hard/Epic are the same words the activity list badges rides with. */}
+          <div className="flex items-center gap-x-4 gap-y-1 ml-[34px] mt-2 flex-wrap">
             {LEVEL_FILL.map((fill, i) => (
-              <div key={i} className="size-3 rounded-[3px]" style={{ backgroundColor: fill }} />
+              <span key={i} className="flex items-center gap-1.5">
+                <span className="size-3 rounded-[3px] shrink-0" style={{ backgroundColor: fill }} />
+                <span className="text-[0.65rem] text-text-muted">{LEVEL_LABELS[i]}</span>
+              </span>
             ))}
-            <span className="text-[0.6rem] text-text-muted ml-1">More</span>
           </div>
         </div>
       </div>

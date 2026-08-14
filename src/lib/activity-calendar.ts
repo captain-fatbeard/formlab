@@ -1,6 +1,7 @@
 import { addDays, eachDayOfInterval, format, getDay, startOfWeek } from 'date-fns'
 import { type StravaActivity } from './strava'
 import { type FitnessSeries } from './fitness'
+import { SCORE_BANDS } from './activities'
 
 /** One day in the grid. Days with no activity still get a cell — the gaps are
  * as much of the story as the streaks. */
@@ -12,7 +13,7 @@ export interface CalendarDay {
   distance: number // meters
   elevation: number // meters
   load: number // training load, from the fitness curve
-  /** 0 = nothing, 1..6 = band of the non-empty days in view. See LEVEL_QUANTILES. */
+  /** 0 = nothing, 1..MAX_LEVEL = how big the day was. See LOAD_BANDS. */
   level: number
   /** Hasn't happened yet. Drawn faintly so the year keeps its full shape
    * without the remaining months reading as days you missed. */
@@ -42,8 +43,8 @@ export interface ActivityCalendar {
   /** Month name + the column it starts in, for the axis above the grid. */
   monthLabels: Array<{ label: string; weekIndex: number }>
   summary: CalendarSummary
-  /** Upper bound of levels 1–3; anything above the last is level 4. */
-  thresholds: number[]
+  /** Upper bound of each level; a value at or above the last is MAX_LEVEL. */
+  bands: readonly number[]
   metric: CalendarMetric
 }
 
@@ -54,41 +55,45 @@ function metricValue(day: CalendarDay, metric: CalendarMetric): number {
 }
 
 /**
- * Where the level boundaries sit, as quantiles of the days that actually have
- * something on them.
+ * Fixed bands, so a colour means a size rather than a ranking.
  *
- * Two decisions here.
+ * This started as quantiles of the days in view, which was wrong in a way that
+ * took a while to see. Quantiles colour by *rank*: a fifth of your days land in
+ * each band whether they differ by 5 TSS or by 300. The consequence was that a
+ * 160 km epic and an ordinary 50 km ride could draw the same shade, and — worse
+ * — the mid-range wobbled at random, because ranking days that were genuinely
+ * alike still spread them across bands. The year came out an even speckle.
  *
- * *Quantiles, not fixed numbers.* 60 TSS is a big day in base and a recovery
- * spin in a build block, so absolute cutoffs would misread whole seasons. This
- * keeps every level in use whatever the year holds — the grid is for reading
- * the shape of a block, not for looking up values.
+ * Fixed bands colour by *magnitude*, so the grid shows the actual shape of a
+ * training week: weekday sessions sit low, weekend long rides sit high, and a
+ * genuinely huge day is unmistakable. It also makes years comparable, which
+ * quantiles could never be.
  *
- * *Weighted to the tail.* Training load is heavily right-skewed: a lot of
- * ordinary days, a handful of big ones. Under plain quartiles the top band held
- * everything above the 75th percentile, so a 160 km epic and a solid 50 km ride
- * drew the same colour — a quarter of all riding days shared the brightest
- * shade, which made "brightest" mean nothing. The last two bands are narrow
- * (80th and 95th) so genuinely exceptional days separate from merely good ones.
+ * Load bands are the app's own Easy/Moderate/Solid/Hard/Epic scale, shared with
+ * the badges in the activity list. Time bands are the rough duration equivalent
+ * of the same effort steps.
  */
-export const LEVEL_QUANTILES = [0.2, 0.4, 0.6, 0.8, 0.95]
+export const LOAD_BANDS = SCORE_BANDS.map((b) => b.upTo)
+export const TIME_BANDS_SECONDS = [45, 90, 150, 240, Infinity].map((min) => min * 60)
 
-/** One more than the number of cutoffs — the top band is everything above the last. */
-export const MAX_LEVEL = LEVEL_QUANTILES.length + 1
+/** Band names, indexed by level. Level 0 is a day with nothing on it. */
+export const LEVEL_LABELS = ['Rest', ...SCORE_BANDS.map((b) => b.label)] as const
 
-export function levelThresholds(values: number[]): number[] {
-  const nonZero = values.filter((v) => v > 0).sort((a, b) => a - b)
-  if (nonZero.length === 0) return LEVEL_QUANTILES.map(() => 0)
-  const at = (q: number) => nonZero[Math.min(nonZero.length - 1, Math.floor(nonZero.length * q))]
-  return LEVEL_QUANTILES.map(at)
+/** Highest level a day can reach. */
+export const MAX_LEVEL = SCORE_BANDS.length
+
+function bandsFor(metric: CalendarMetric): readonly number[] {
+  return metric === 'load' ? LOAD_BANDS : TIME_BANDS_SECONDS
 }
 
-export function levelFor(value: number, thresholds: number[]): number {
+/** `bands` are upper bounds, one per level, the last of which is Infinity —
+ * so every positive value lands in a band and there is no fallthrough. */
+export function levelFor(value: number, bands: readonly number[]): number {
   if (value <= 0) return 0
-  for (let i = 0; i < thresholds.length; i++) {
-    if (value <= thresholds[i]) return i + 1
+  for (let i = 0; i < bands.length; i++) {
+    if (value < bands[i]) return i + 1
   }
-  return thresholds.length + 1
+  return bands.length
 }
 
 /** Longest and current run of consecutive active days, oldest-first input. */
@@ -155,8 +160,8 @@ export function buildActivityCalendar(
   // remaining months counted against it.
   const elapsed = days.filter((d) => !d.isFuture)
 
-  const thresholds = levelThresholds(elapsed.map((d) => metricValue(d, metric)))
-  for (const d of days) d.level = levelFor(metricValue(d, metric), thresholds)
+  const bands = bandsFor(metric)
+  for (const d of days) d.level = levelFor(metricValue(d, metric), bands)
 
   // Columns are Monday-start weeks; pad the first and last so every column has
   // seven rows and the weekday axis lines up.
@@ -194,7 +199,7 @@ export function buildActivityCalendar(
   return {
     weeks,
     monthLabels,
-    thresholds,
+    bands,
     metric,
     summary: {
       days: elapsed.length,

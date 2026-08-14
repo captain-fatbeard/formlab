@@ -3,12 +3,15 @@ import type { StravaActivity } from '~/lib/strava'
 import type { FitnessSeries } from '~/lib/fitness'
 import {
   buildActivityCalendar,
+  LEVEL_LABELS,
+  LOAD_BANDS,
   MAX_LEVEL,
+  TIME_BANDS_SECONDS,
   levelFor,
-  levelThresholds,
   streaks,
   type CalendarDay,
 } from '~/lib/activity-calendar'
+import { getScoreLabel } from '~/lib/activities'
 
 function ride(day: string, overrides: Partial<StravaActivity> = {}): StravaActivity {
   return {
@@ -35,60 +38,60 @@ function fitness(loads: Record<string, number> = {}): FitnessSeries {
 const FROM = new Date('2026-01-05T00:00:00') // a Monday
 const TO = new Date('2026-01-18T00:00:00') // the Sunday two weeks later
 
-describe('levelThresholds / levelFor', () => {
-  it('puts an empty day at level 0 whatever the thresholds', () => {
-    expect(levelFor(0, [10, 20, 30])).toBe(0)
-    expect(levelFor(0, [0, 0, 0])).toBe(0)
+describe('levelFor — fixed bands', () => {
+  it('puts an empty day at level 0', () => {
+    expect(levelFor(0, LOAD_BANDS)).toBe(0)
+    expect(levelFor(-1, LOAD_BANDS)).toBe(0)
   })
 
-  it('ignores empty days when computing quartiles', () => {
-    // Only the non-zero values should shape the ramp — otherwise a mostly-rest
-    // period pushes every real day into the top bucket.
-    expect(levelThresholds([0, 0, 0, 10, 20, 30, 40])).toEqual(
-      levelThresholds([10, 20, 30, 40])
-    )
+  it('maps load onto the app\'s own Easy/Moderate/Solid/Hard/Epic scale', () => {
+    // Same bands the activity list badges rides with, so a cell and a badge
+    // never disagree about how big a day was.
+    expect(LEVEL_LABELS[levelFor(30, LOAD_BANDS)]).toBe('Easy')
+    expect(LEVEL_LABELS[levelFor(90, LOAD_BANDS)]).toBe('Moderate')
+    expect(LEVEL_LABELS[levelFor(150, LOAD_BANDS)]).toBe('Solid')
+    expect(LEVEL_LABELS[levelFor(250, LOAD_BANDS)]).toBe('Hard')
+    expect(LEVEL_LABELS[levelFor(430, LOAD_BANDS)]).toBe('Epic')
   })
 
-  it('spreads real values across every level', () => {
-    const values = Array.from({ length: 40 }, (_, i) => (i + 1) * 10)
-    const t = levelThresholds(values)
-    const levels = new Set(values.map((v) => levelFor(v, t)))
-    for (let l = 1; l <= MAX_LEVEL; l++) expect(levels).toContain(l)
+  it('agrees with getScoreLabel on every band', () => {
+    for (const load of [1, 59, 60, 119, 120, 199, 200, 299, 300, 900]) {
+      expect(LEVEL_LABELS[levelFor(load, LOAD_BANDS)]).toBe(getScoreLabel(load))
+    }
   })
 
-  // The complaint this bucketing exists to fix: under plain quartiles a huge
-  // day and a merely-good one both landed in the top band.
-  it('separates an exceptional day from a solid one', () => {
-    // Right-skewed: many ordinary days, a few big, one enormous.
-    const ordinary = Array.from({ length: 60 }, () => 60)
-    const solid = Array.from({ length: 20 }, () => 150)
-    const values = [...ordinary, ...solid, 430]
-    const t = levelThresholds(values)
-
-    expect(levelFor(430, t)).toBeGreaterThan(levelFor(150, t))
-    expect(levelFor(150, t)).toBeGreaterThan(levelFor(60, t))
-    expect(levelFor(430, t)).toBe(MAX_LEVEL)
+  // The original complaint: a 160 km ride drew the same colour as a 50 km one.
+  it('separates an epic day from a solid one and from an ordinary one', () => {
+    expect(levelFor(430, LOAD_BANDS)).toBeGreaterThan(levelFor(150, LOAD_BANDS))
+    expect(levelFor(150, LOAD_BANDS)).toBeGreaterThan(levelFor(72, LOAD_BANDS))
+    expect(levelFor(72, LOAD_BANDS)).toBeGreaterThan(levelFor(51, LOAD_BANDS))
+    expect(levelFor(430, LOAD_BANDS)).toBe(MAX_LEVEL)
   })
 
-  it('reserves the top band for roughly the best few percent', () => {
-    const values = Array.from({ length: 100 }, (_, i) => i + 1)
-    const t = levelThresholds(values)
-    const top = values.filter((v) => levelFor(v, t) === MAX_LEVEL)
-    expect(top.length).toBeLessThanOrEqual(10)
-    expect(top.length).toBeGreaterThan(0)
+  it('is exact at every boundary', () => {
+    expect(levelFor(59, LOAD_BANDS)).toBe(1)
+    expect(levelFor(60, LOAD_BANDS)).toBe(2)
+    expect(levelFor(119, LOAD_BANDS)).toBe(2)
+    expect(levelFor(120, LOAD_BANDS)).toBe(3)
   })
 
-  it('survives a period with a single active day', () => {
-    const t = levelThresholds([50])
-    expect(levelFor(50, t)).toBe(1)
-    expect(levelFor(0, t)).toBe(0)
+  it('bands time by duration on the same five steps', () => {
+    expect(LEVEL_LABELS[levelFor(20 * 60, TIME_BANDS_SECONDS)]).toBe('Easy')
+    expect(LEVEL_LABELS[levelFor(60 * 60, TIME_BANDS_SECONDS)]).toBe('Moderate')
+    expect(LEVEL_LABELS[levelFor(120 * 60, TIME_BANDS_SECONDS)]).toBe('Solid')
+    expect(LEVEL_LABELS[levelFor(300 * 60, TIME_BANDS_SECONDS)]).toBe('Epic')
   })
 
-  it('survives a period with no activity at all', () => {
-    const t = levelThresholds([0, 0])
-    expect(t).toHaveLength(MAX_LEVEL - 1)
-    expect(t.every((v) => v === 0)).toBe(true)
-    expect(levelFor(0, t)).toBe(0)
+  // What fixed bands buy over quantiles: the answer doesn't move when the rest
+  // of the year changes, so years are comparable and a big day always looks big.
+  it('gives a day the same level regardless of what else the year holds', () => {
+    const easyYear = [40, 45, 50, 430]
+    const hardYear = [200, 250, 280, 430]
+    for (const v of [430]) {
+      expect(levelFor(v, LOAD_BANDS)).toBe(levelFor(v, LOAD_BANDS))
+    }
+    expect(easyYear.map((v) => levelFor(v, LOAD_BANDS)).at(-1))
+      .toBe(hardYear.map((v) => levelFor(v, LOAD_BANDS)).at(-1))
   })
 })
 
