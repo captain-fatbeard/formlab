@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.27.1](https://github.com/captain-fatbeard/formlab/compare/v1.27.0...v1.27.1) (2026-08-14)
+
+
+### Refactoring
+
+* **sync:** give the ingestion pipeline an interface ([32ca153](https://github.com/captain-fatbeard/formlab/commit/32ca153fdf448e67b9c0182e4ef729eff736dca6))
+
 ## [1.27.0](https://github.com/captain-fatbeard/formlab/compare/v1.26.0...v1.27.0) (2026-08-14)
 
 

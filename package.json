@@ -1,6 +1,6 @@
 {
   "name": "formlab",
-  "version": "1.27.0",
+  "version": "1.27.1",
   "type": "module",
   "description": "Analyze your fitness form and training metrics",
   "scripts": {
