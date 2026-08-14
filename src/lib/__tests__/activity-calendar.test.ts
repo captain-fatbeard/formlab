@@ -70,7 +70,7 @@ describe('levelThresholds / levelFor', () => {
 describe('streaks', () => {
   const day = (count: number): CalendarDay => ({
     date: '2026-01-01', activities: [], count,
-    movingTime: 0, distance: 0, elevation: 0, load: 0, level: 0,
+    movingTime: 0, distance: 0, elevation: 0, load: 0, level: 0, isFuture: false,
   })
 
   it('finds the longest run of active days', () => {
@@ -190,6 +190,64 @@ describe('buildActivityCalendar — metric choice', () => {
     for (const d of cal.weeks.flat()) {
       if (d && d.count > 0 && d.load > 0) expect(d.level).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('buildActivityCalendar — a year in progress', () => {
+  // Full calendar year, "today" halfway through it.
+  const YEAR_START = new Date('2026-01-01T00:00:00')
+  const YEAR_END = new Date('2026-12-31T00:00:00')
+  const TODAY = new Date('2026-01-10T12:00:00')
+
+  const cal = buildActivityCalendar(
+    [ride('2026-01-05', { moving_time: 3600 }), ride('2026-01-08', { moving_time: 1800 })],
+    fitness({ '2026-01-05': 100, '2026-01-08': 50 }),
+    YEAR_START, YEAR_END, 'load', TODAY
+  )
+  const cells = cal.weeks.flat().filter((d): d is CalendarDay => d != null)
+
+  it('draws the whole year so every year is the same width', () => {
+    expect(cells).toHaveLength(365)
+  })
+
+  it('marks days after today as future, and today itself as not', () => {
+    expect(cells.find((d) => d.date === '2026-01-11')!.isFuture).toBe(true)
+    expect(cells.find((d) => d.date === '2026-01-10')!.isFuture).toBe(false)
+    expect(cells.find((d) => d.date === '2026-01-09')!.isFuture).toBe(false)
+    expect(cells.find((d) => d.date === '2026-12-31')!.isFuture).toBe(true)
+  })
+
+  it('counts only elapsed days, so "% of days active" stays honest', () => {
+    // 10 days have happened, not 365.
+    expect(cal.summary.days).toBe(10)
+    expect(cal.summary.activeDays).toBe(2)
+  })
+
+  it('does not let the empty rest of the year break the current streak', () => {
+    // Jan 8 was active, Jan 9 and 10 were not — but the remaining eleven
+    // months must not be counted as a rest run either.
+    expect(cal.summary.longestStreak).toBe(1)
+    expect(cal.summary.currentStreak).toBe(0)
+  })
+
+  it('derives level thresholds from elapsed days only', () => {
+    // 350 future days sitting at zero would otherwise flood the quartiles.
+    expect(cells.find((d) => d.date === '2026-01-05')!.level).toBeGreaterThan(0)
+    expect(cells.find((d) => d.date === '2026-01-08')!.level).toBeGreaterThan(0)
+  })
+
+  it('gives future days no level of their own', () => {
+    for (const d of cells.filter((c) => c.isFuture)) expect(d.level).toBe(0)
+  })
+
+  it('is unaffected by the future for a year that has fully elapsed', () => {
+    const past = buildActivityCalendar(
+      [ride('2025-06-01')],
+      fitness({ '2025-06-01': 80 }),
+      new Date('2025-01-01T00:00:00'), new Date('2025-12-31T00:00:00'), 'load', TODAY
+    )
+    expect(past.summary.days).toBe(365)
+    expect(past.weeks.flat().filter((d) => d?.isFuture)).toHaveLength(0)
   })
 })
 

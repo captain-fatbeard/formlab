@@ -14,6 +14,9 @@ export interface CalendarDay {
   load: number // training load, from the fitness curve
   /** 0 = nothing, 1..4 = quartile of the non-empty days in view. */
   level: 0 | 1 | 2 | 3 | 4
+  /** Hasn't happened yet. Drawn faintly so the year keeps its full shape
+   * without the remaining months reading as days you missed. */
+  isFuture: boolean
 }
 
 export type CalendarMetric = 'load' | 'time'
@@ -106,7 +109,8 @@ export function buildActivityCalendar(
   fitness: FitnessSeries,
   from: Date,
   to: Date,
-  metric: CalendarMetric = 'load'
+  metric: CalendarMetric = 'load',
+  today: Date = new Date()
 ): ActivityCalendar {
   const byDay = new Map<string, StravaActivity[]>()
   for (const a of activities) {
@@ -116,6 +120,7 @@ export function buildActivityCalendar(
     else byDay.set(key, [a])
   }
 
+  const todayKey = format(today, 'yyyy-MM-dd')
   const days: CalendarDay[] = eachDayOfInterval({ start: from, end: to }).map((d) => {
     const date = format(d, 'yyyy-MM-dd')
     const dayActivities = byDay.get(date) ?? []
@@ -128,10 +133,16 @@ export function buildActivityCalendar(
       elevation: dayActivities.reduce((s, a) => s + a.total_elevation_gain, 0),
       load: fitness.dailyTss.get(date) ?? 0,
       level: 0,
+      isFuture: date > todayKey,
     }
   })
 
-  const thresholds = levelThresholds(days.map((d) => metricValue(d, metric)))
+  // Everything below counts only days that have happened. A year in progress
+  // shows its full shape, but "58% of days active" would be nonsense if the
+  // remaining months counted against it.
+  const elapsed = days.filter((d) => !d.isFuture)
+
+  const thresholds = levelThresholds(elapsed.map((d) => metricValue(d, metric)))
   for (const d of days) d.level = levelFor(metricValue(d, metric), thresholds)
 
   // Columns are Monday-start weeks; pad the first and last so every column has
@@ -161,8 +172,8 @@ export function buildActivityCalendar(
     weeks.push(week)
   }
 
-  const active = days.filter((d) => d.count > 0)
-  const { longest, current } = streaks(days)
+  const active = elapsed.filter((d) => d.count > 0)
+  const { longest, current } = streaks(elapsed)
   const best = active.length > 0
     ? active.reduce((a, b) => (metricValue(b, metric) > metricValue(a, metric) ? b : a))
     : null
@@ -173,13 +184,13 @@ export function buildActivityCalendar(
     thresholds,
     metric,
     summary: {
-      days: days.length,
+      days: elapsed.length,
       activeDays: active.length,
       activities: active.reduce((s, d) => s + d.count, 0),
       movingTime: active.reduce((s, d) => s + d.movingTime, 0),
       distance: active.reduce((s, d) => s + d.distance, 0),
       elevation: active.reduce((s, d) => s + d.elevation, 0),
-      load: days.reduce((s, d) => s + d.load, 0),
+      load: elapsed.reduce((s, d) => s + d.load, 0),
       longestStreak: longest,
       currentStreak: current,
       best,

@@ -143,11 +143,11 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
   const fitness = useMemo(() => fitnessSeries(activities, profile), [activities, profile])
 
   const calendar = useMemo(() => {
+    // Always the whole year, so every year draws at the same size and a season
+    // in progress doesn't render wider cells than a finished one. Days that
+    // haven't happened are dimmed rather than omitted.
     const from = new Date(`${year}-01-01T00:00:00`)
-    const endOfYear = new Date(`${year}-12-31T00:00:00`)
-    const today = new Date()
-    // Don't draw the rest of the year as empty cells — it reads as missed days.
-    const to = endOfYear > today ? today : endOfYear
+    const to = new Date(`${year}-12-31T00:00:00`)
     return buildActivityCalendar(activities, fitness, from, to, metric)
   }, [activities, fitness, year, metric])
 
@@ -194,13 +194,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
           worth aiming at on narrow screens, and the container scrolls rather
           than squashing below that. */}
       <div className="overflow-x-auto pb-1">
-        <div
-          className="flex flex-col gap-1 min-w-[560px]"
-          // Cap the cell size so a first, part-finished season — which has far
-          // fewer than 53 columns — doesn't stretch into giant blocks. A full
-          // year never reaches the cap and fills the page.
-          style={{ maxWidth: `calc(34px + ${calendar.weeks.length} * 2.25rem)` }}
-        >
+        <div className="flex flex-col gap-1 min-w-[560px]">
           {/* Month axis */}
           <div
             className="grid gap-[3px] ml-[34px]"
@@ -236,6 +230,21 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
               {calendar.weeks.map((week, wi) =>
                 week.map((day, di) => {
                   if (!day) return <div key={`${wi}-${di}`} className="aspect-square" />
+
+                  // A day that hasn't happened is drawn faintly and isn't
+                  // interactive — it keeps the year's shape without inviting a
+                  // hover that has nothing to show.
+                  if (day.isFuture) {
+                    return (
+                      <div
+                        key={`${wi}-${di}`}
+                        aria-hidden="true"
+                        className="aspect-square w-full rounded-[3px] opacity-25"
+                        style={{ backgroundColor: LEVEL_FILL[0] }}
+                      />
+                    )
+                  }
+
                   const isHovered = hovered?.date === day.date
                   return (
                     <button
