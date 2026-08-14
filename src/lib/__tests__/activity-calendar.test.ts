@@ -3,6 +3,7 @@ import type { StravaActivity } from '~/lib/strava'
 import type { FitnessSeries } from '~/lib/fitness'
 import {
   buildActivityCalendar,
+  MAX_LEVEL,
   levelFor,
   levelThresholds,
   streaks,
@@ -48,11 +49,33 @@ describe('levelThresholds / levelFor', () => {
     )
   })
 
-  it('spreads real values across all four levels', () => {
-    const values = [10, 20, 30, 40, 50, 60, 70, 80]
+  it('spreads real values across every level', () => {
+    const values = Array.from({ length: 40 }, (_, i) => (i + 1) * 10)
     const t = levelThresholds(values)
-    const levels = values.map((v) => levelFor(v, t))
-    expect(new Set(levels)).toEqual(new Set([1, 2, 3, 4]))
+    const levels = new Set(values.map((v) => levelFor(v, t)))
+    for (let l = 1; l <= MAX_LEVEL; l++) expect(levels).toContain(l)
+  })
+
+  // The complaint this bucketing exists to fix: under plain quartiles a huge
+  // day and a merely-good one both landed in the top band.
+  it('separates an exceptional day from a solid one', () => {
+    // Right-skewed: many ordinary days, a few big, one enormous.
+    const ordinary = Array.from({ length: 60 }, () => 60)
+    const solid = Array.from({ length: 20 }, () => 150)
+    const values = [...ordinary, ...solid, 430]
+    const t = levelThresholds(values)
+
+    expect(levelFor(430, t)).toBeGreaterThan(levelFor(150, t))
+    expect(levelFor(150, t)).toBeGreaterThan(levelFor(60, t))
+    expect(levelFor(430, t)).toBe(MAX_LEVEL)
+  })
+
+  it('reserves the top band for roughly the best few percent', () => {
+    const values = Array.from({ length: 100 }, (_, i) => i + 1)
+    const t = levelThresholds(values)
+    const top = values.filter((v) => levelFor(v, t) === MAX_LEVEL)
+    expect(top.length).toBeLessThanOrEqual(10)
+    expect(top.length).toBeGreaterThan(0)
   })
 
   it('survives a period with a single active day', () => {
@@ -62,8 +85,10 @@ describe('levelThresholds / levelFor', () => {
   })
 
   it('survives a period with no activity at all', () => {
-    expect(levelThresholds([0, 0])).toEqual([0, 0, 0])
-    expect(levelFor(0, [0, 0, 0])).toBe(0)
+    const t = levelThresholds([0, 0])
+    expect(t).toHaveLength(MAX_LEVEL - 1)
+    expect(t.every((v) => v === 0)).toBe(true)
+    expect(levelFor(0, t)).toBe(0)
   })
 })
 

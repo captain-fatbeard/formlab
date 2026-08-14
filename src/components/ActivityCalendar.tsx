@@ -18,26 +18,30 @@ interface ActivityCalendarProps {
 
 /**
  * Sequential ramp — one hue, monotone lightness, dark-anchored for a dark
- * surface. Ordinal checks: monotone L, adjacent ΔL ≥ 0.06, dark end 3.27:1
- * against the card surface, hue spread 6°, top step 14.2:1.
+ * surface. Ordinal checks pass: monotone L, adjacent ΔL ≥ 0.06, dark end above
+ * the contrast floor against both the card and the empty-day tone.
  *
- * The spread matters more than it looks. A tighter ramp (…#14b8a6, #2dd4bf)
- * also passes the numbers but collapses into roughly two visible states at
- * 11px, which defeats the point — the grid exists to show that a 3h endurance
- * day and a 40min spin are different. Steps 3 and 4 deliberately jump further
- * than the minimum. Going brighter still (#ccfbf1) separates best of all but
- * reads as white rather than teal, so the top step stops looking like "most"
- * and starts looking like "selected".
+ * Six steps rather than four. With four, the top band covered everything above
+ * the 75th percentile, so a 160 km epic and a 50 km ride drew the same colour.
+ * The extra steps only help paired with the tail-weighted cutoffs in
+ * LEVEL_QUANTILES — more bands over a flat split would just have subdivided the
+ * ordinary days.
+ *
+ * The near-white top is deliberate and depends on that rarity. At a quarter of
+ * all days it read as "selected" and lost the teal identity; at the top 5% it
+ * reads as "that was the big one", which is the signal wanted.
  *
  * Level 0 is a recessive surface tone, not a ramp step: an empty day is absence
  * of data, not the smallest amount of it.
  */
 const LEVEL_FILL = [
   'var(--color-bg-tertiary)',
-  '#0f766e',
+  '#115e59',
   '#0d9488',
+  '#14b8a6',
   '#2dd4bf',
-  '#99f6e4',
+  '#5eead4',
+  '#ccfbf1',
 ] as const
 
 const METRICS: Array<{ id: CalendarMetric; label: string }> = [

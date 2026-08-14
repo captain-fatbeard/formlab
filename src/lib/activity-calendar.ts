@@ -12,8 +12,8 @@ export interface CalendarDay {
   distance: number // meters
   elevation: number // meters
   load: number // training load, from the fitness curve
-  /** 0 = nothing, 1..4 = quartile of the non-empty days in view. */
-  level: 0 | 1 | 2 | 3 | 4
+  /** 0 = nothing, 1..6 = band of the non-empty days in view. See LEVEL_QUANTILES. */
+  level: number
   /** Hasn't happened yet. Drawn faintly so the year keeps its full shape
    * without the remaining months reading as days you missed. */
   isFuture: boolean
@@ -54,28 +54,41 @@ function metricValue(day: CalendarDay, metric: CalendarMetric): number {
 }
 
 /**
- * Level cutoffs from the quartiles of the days that actually have something on
- * them.
+ * Where the level boundaries sit, as quantiles of the days that actually have
+ * something on them.
  *
- * Fixed cutoffs don't work across athletes or across a season — 60 TSS is a big
- * day in base and a recovery spin in a build block. Quartiles of the non-empty
- * days keep all five levels in use whatever the period holds, which is the
- * whole point of the grid: you're looking for the shape of the block, not
- * absolute numbers.
+ * Two decisions here.
+ *
+ * *Quantiles, not fixed numbers.* 60 TSS is a big day in base and a recovery
+ * spin in a build block, so absolute cutoffs would misread whole seasons. This
+ * keeps every level in use whatever the year holds — the grid is for reading
+ * the shape of a block, not for looking up values.
+ *
+ * *Weighted to the tail.* Training load is heavily right-skewed: a lot of
+ * ordinary days, a handful of big ones. Under plain quartiles the top band held
+ * everything above the 75th percentile, so a 160 km epic and a solid 50 km ride
+ * drew the same colour — a quarter of all riding days shared the brightest
+ * shade, which made "brightest" mean nothing. The last two bands are narrow
+ * (80th and 95th) so genuinely exceptional days separate from merely good ones.
  */
+export const LEVEL_QUANTILES = [0.2, 0.4, 0.6, 0.8, 0.95]
+
+/** One more than the number of cutoffs — the top band is everything above the last. */
+export const MAX_LEVEL = LEVEL_QUANTILES.length + 1
+
 export function levelThresholds(values: number[]): number[] {
   const nonZero = values.filter((v) => v > 0).sort((a, b) => a - b)
-  if (nonZero.length === 0) return [0, 0, 0]
+  if (nonZero.length === 0) return LEVEL_QUANTILES.map(() => 0)
   const at = (q: number) => nonZero[Math.min(nonZero.length - 1, Math.floor(nonZero.length * q))]
-  return [at(0.25), at(0.5), at(0.75)]
+  return LEVEL_QUANTILES.map(at)
 }
 
-export function levelFor(value: number, thresholds: number[]): CalendarDay['level'] {
+export function levelFor(value: number, thresholds: number[]): number {
   if (value <= 0) return 0
-  if (value <= thresholds[0]) return 1
-  if (value <= thresholds[1]) return 2
-  if (value <= thresholds[2]) return 3
-  return 4
+  for (let i = 0; i < thresholds.length; i++) {
+    if (value <= thresholds[i]) return i + 1
+  }
+  return thresholds.length + 1
 }
 
 /** Longest and current run of consecutive active days, oldest-first input. */
