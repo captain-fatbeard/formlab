@@ -250,6 +250,7 @@ function RecordsPage() {
   const [expandedEffort, setExpandedEffort] = useState<string | null>(null)
   const [segmentSort, setSegmentSort] = useState<'count' | 'time' | 'grade'>('count')
   const [segmentFilter, setSegmentFilter] = useState<'all' | 'irl' | 'zwift'>('all')
+  const [segmentSearch, setSegmentSearch] = useState('')
   const [segmentPage, setSegmentPage] = useState(1)
 
   // Personal records from all activities (not filtered by time range)
@@ -345,17 +346,20 @@ function RecordsPage() {
         ? segmentEfforts.filter((e) => e.activityType === 'VirtualRide')
         : segmentEfforts.filter((e) => e.activityType === 'Ride')
     const summaries = groupSegmentEfforts(filtered)
-    const sorted = [...summaries]
+    const query = segmentSearch.toLowerCase().trim()
+    const sorted = query
+      ? summaries.filter((s) => s.name.toLowerCase().includes(query))
+      : [...summaries]
     if (segmentSort === 'count') sorted.sort((a, b) => b.effortCount - a.effortCount)
     else if (segmentSort === 'time') sorted.sort((a, b) => a.bestTime - b.bestTime)
     else if (segmentSort === 'grade') sorted.sort((a, b) => b.averageGrade - a.averageGrade)
     return sorted
-  }, [segmentEfforts, segmentSort, segmentFilter])
+  }, [segmentEfforts, segmentSort, segmentFilter, segmentSearch])
 
-  // Reset to first page when filter/sort changes.
+  // Reset to first page when filter/sort/search changes.
   useEffect(() => {
     setSegmentPage(1)
-  }, [segmentSort, segmentFilter])
+  }, [segmentSort, segmentFilter, segmentSearch])
 
   const pagedSegments = useMemo(
     () =>
@@ -550,7 +554,31 @@ function RecordsPage() {
           <h2 className="text-xl font-bold bg-linear-to-br from-moderate to-[#6366f1] bg-clip-text text-transparent">
             Popular Segments
           </h2>
-          <div className="flex items-center gap-4 max-[480px]:flex-col max-[480px]:items-start max-[480px]:gap-2">
+          <div className="flex items-center justify-end gap-4 flex-wrap max-md:w-full max-md:justify-start max-[480px]:flex-col max-[480px]:items-stretch max-[480px]:gap-2">
+            <div className="relative w-[220px] max-[480px]:w-full">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                value={segmentSearch}
+                onChange={(e) => setSegmentSearch(e.target.value)}
+                placeholder="Search segments..."
+                aria-label="Search segments"
+                className="w-full bg-bg-tertiary border border-border text-text-primary py-1.5 pl-9 pr-8 rounded-[var(--radius-sm)] text-[0.8rem] transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15"
+              />
+              {segmentSearch && (
+                <button
+                  type="button"
+                  onClick={() => setSegmentSearch('')}
+                  aria-label="Clear segment search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary bg-transparent border-none cursor-pointer text-sm leading-none p-1"
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <div className="flex gap-1 bg-bg-secondary rounded-[var(--radius-sm)] border border-border-subtle p-0.5">
               {(['all', 'irl', 'zwift'] as const).map((filter) => (
                 <button
@@ -588,7 +616,9 @@ function RecordsPage() {
           <div className="text-text-muted text-sm py-8 text-center">Loading segment data...</div>
         ) : segmentSummaries.length === 0 ? (
           <div className="text-text-muted text-sm py-8 text-center">
-            No segment data yet. Ride more routes to build your segment history!
+            {segmentSearch.trim()
+              ? `No segments match "${segmentSearch.trim()}".`
+              : 'No segment data yet. Ride more routes to build your segment history!'}
           </div>
         ) : (
           <div className="flex flex-col gap-3">
