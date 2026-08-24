@@ -1,6 +1,9 @@
 import { createFileRoute, Outlet, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { storage } from '~/lib/storage'
+import { GlobalFilters } from '~/components/GlobalFilters'
+import { SyncStatus } from '~/components/SyncStatus'
+import { useModalPanel } from '~/lib/use-modal-panel'
 import {
   DEFAULT_SETTINGS,
   type TimeRange,
@@ -123,6 +126,8 @@ function DashboardLayout() {
   const [isSyncingAll, setIsSyncingAll] = useState(false)
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null)
   const [syncMessage, setSyncMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  // Surfaced in the top bar, so a number that looks stale can be checked.
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
 
   const [timeRange, setTimeRange] = useState<TimeRange>(DEFAULT_SETTINGS.timeRange)
   const [activityType, setActivityType] = useState<ActivityType>(DEFAULT_SETTINGS.activityType)
@@ -191,6 +196,7 @@ function DashboardLayout() {
     try {
       // Phase 1: Sync activity list
       const { added, persisted } = await sync.sync({ full: true })
+      if (persisted) setLastSyncedAt(Date.now())
 
       // A merge that never reached Supabase looks like a successful sync until
       // the next page load throws it away, so say so rather than claiming ok.
@@ -308,6 +314,7 @@ function DashboardLayout() {
       // clear auth, but a rejected passphrase has to surface (see below).
       try {
         await sync.sync()
+        setLastSyncedAt(Date.now())
         // Backfill details (and estimated power) for any new activities in the
         // background — the sync above has already committed them.
         sync.backfillDetails().catch((err) =>
@@ -341,7 +348,10 @@ function DashboardLayout() {
 
       sync
         .sync()
-        .then(() => sync.backfillDetails())
+        .then(() => {
+          setLastSyncedAt(Date.now())
+          return sync.backfillDetails()
+        })
         .catch(async (err) => {
           console.warn('Foreground re-sync failed:', err)
           if (isStalePassphrase(err)) {
@@ -358,6 +368,14 @@ function DashboardLayout() {
       window.removeEventListener('focus', resync)
     }
   }, [athlete, sync])
+
+  const closeSidebar = useCallback(() => setSidebarOpen(false), [])
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), [])
+  // Escape to dismiss, focus moved in on open and restored on close. Paired
+  // with `inert` below, which is what takes a closed drawer's controls out of
+  // the tab order and the accessibility tree.
+  const sidebarRef = useModalPanel<HTMLElement>(sidebarOpen, closeSidebar)
+  const mobileNavRef = useModalPanel<HTMLElement>(mobileNavOpen, closeMobileNav)
 
   const handleLogout = async () => {
     await storage.auth.clear()
@@ -621,43 +639,43 @@ function DashboardLayout() {
 
             {/* Desktop navigation */}
             <nav className="nav-links flex items-center gap-0.5 flex-1 max-md:hidden">
-              <Link to="/plan" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-muted py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-secondary">
+              <Link to="/plan" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-secondary py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-primary">
                 <svg className="nav-icon size-[15px] transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                 </svg>
                 Plan
               </Link>
-              <Link to="/training" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-muted py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-secondary">
+              <Link to="/training" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-secondary py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-primary">
                 <svg className="nav-icon size-[15px] transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
                 Training
               </Link>
-              <Link to="/health" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-muted py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-secondary">
+              <Link to="/health" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-secondary py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-primary">
                 <svg className="nav-icon size-[15px] transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
                 </svg>
                 Health
               </Link>
-              <Link to="/performance" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-muted py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-secondary">
+              <Link to="/performance" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-secondary py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-primary">
                 <svg className="nav-icon size-[15px] transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                 </svg>
                 Performance
               </Link>
-              <Link to="/records" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-muted py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-secondary">
+              <Link to="/records" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-secondary py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-primary">
                 <svg className="nav-icon size-[15px] transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
                 </svg>
                 Records
               </Link>
-              <Link to="/activities" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-muted py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-secondary">
+              <Link to="/activities" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-secondary py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-primary">
                 <svg className="nav-icon size-[15px] transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
                 </svg>
                 Activities
               </Link>
-              <Link to="/bike-fit" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-muted py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-secondary">
+              <Link to="/bike-fit" activeProps={{ className: 'active' }} className="flex items-center gap-1.5 text-text-secondary py-3.5 px-3 text-[0.8125rem] font-medium cursor-pointer relative transition-all duration-200 no-underline hover:text-text-primary">
                 <svg className="nav-icon size-[15px] transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="18.5" cy="17.5" r="3.5" /><circle cx="5.5" cy="17.5" r="3.5" /><circle cx="15" cy="5" r="1" /><path d="M12 17.5V14l-3-3 4-3 2 3h2" />
                 </svg>
@@ -665,13 +683,26 @@ function DashboardLayout() {
               </Link>
             </nav>
 
-            {/* Right side: avatar + mobile hamburger */}
+            {/* Right side: global filters, sync state, avatar, hamburger */}
             <div className="flex items-center gap-2 ml-auto">
+              {/* The two controls that decide what most numbers on the page
+                  mean. They read their current value, so the scope of a chart
+                  is legible without opening anything. */}
+              <GlobalFilters />
+
+              <SyncStatus
+                lastSyncedAt={lastSyncedAt}
+                isSyncing={isSyncingAll}
+                onSync={handleSyncAll}
+              />
+
               {/* Avatar — opens settings */}
               <button
                 className="size-8 rounded-full bg-accent/15 border border-accent/30 text-accent text-[0.6875rem] font-semibold flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-accent/25 hover:border-accent/50 max-md:hidden"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                title={`${athlete.firstname} ${athlete.lastname}`}
+                title={`${athlete.firstname} ${athlete.lastname} — settings`}
+                aria-haspopup="dialog"
+                aria-expanded={sidebarOpen}
               >
                 {initials}
               </button>
@@ -681,6 +712,8 @@ function DashboardLayout() {
                 className="hidden max-md:flex items-center justify-center text-text-muted size-8 rounded-[var(--radius-sm)] cursor-pointer transition-all duration-200 hover:bg-bg-tertiary hover:text-text-primary"
                 onClick={() => setMobileNavOpen(!mobileNavOpen)}
                 aria-label="Toggle navigation"
+                aria-haspopup="dialog"
+                aria-expanded={mobileNavOpen}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <line x1="3" y1="6" x2="21" y2="6"/>
@@ -696,7 +729,14 @@ function DashboardLayout() {
         {mobileNavOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-fade-in" onClick={() => setMobileNavOpen(false)} />
         )}
-        <aside className={`hidden max-md:flex flex-col fixed top-0 right-0 h-screen w-70 bg-bg-secondary border-l border-border z-50 shadow-lg transition-transform duration-300 max-[480px]:w-full ${mobileNavOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <aside
+          ref={mobileNavRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation"
+          inert={!mobileNavOpen}
+          className={`hidden max-md:flex flex-col fixed top-0 right-0 h-screen w-70 bg-bg-secondary border-l border-border z-50 shadow-lg transition-transform duration-300 max-[480px]:w-full ${mobileNavOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        >
           <div className="flex justify-between items-center p-5 border-b border-border-subtle">
             <span className="text-base font-semibold text-text-primary">Menu</span>
             <button
@@ -752,6 +792,19 @@ function DashboardLayout() {
               </svg>
               Docs
             </Link>
+            <Link
+              to="/glossary"
+              activeProps={{ className: 'active' }}
+              onClick={() => setMobileNavOpen(false)}
+              className="flex items-center gap-2.5 py-2.5 px-3 text-text-secondary no-underline text-sm font-medium rounded-[var(--radius-md)] transition-all duration-150 hover:bg-bg-tertiary hover:text-text-primary"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Glossary
+            </Link>
             <button
               className="flex items-center gap-2.5 py-2.5 px-3 text-text-secondary text-sm font-medium rounded-[var(--radius-md)] cursor-pointer transition-all duration-150 w-full hover:bg-bg-tertiary hover:text-text-primary"
               onClick={() => { setMobileNavOpen(false); setSidebarOpen(true) }}
@@ -777,7 +830,14 @@ function DashboardLayout() {
         {sidebarOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-fade-in" onClick={() => setSidebarOpen(false)} />
         )}
-        <aside className={`fixed top-0 right-0 h-screen w-80 bg-bg-secondary border-l border-border z-50 flex flex-col shadow-lg transition-transform duration-300 max-md:w-full max-md:max-w-80 max-[480px]:max-w-none ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <aside
+          ref={sidebarRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Settings"
+          inert={!sidebarOpen}
+          className={`fixed top-0 right-0 h-screen w-80 bg-bg-secondary border-l border-border z-50 flex flex-col shadow-lg transition-transform duration-300 max-md:w-full max-md:max-w-80 max-[480px]:max-w-none ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        >
           <div className="flex justify-between items-center p-6 border-b border-border-subtle">
             <h2 className="text-xl font-semibold text-text-primary">Settings</h2>
             <button
@@ -792,44 +852,13 @@ function DashboardLayout() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="mb-8">
-              <h3 className="text-xs text-text-muted uppercase tracking-wider font-semibold mb-4 pb-2 border-b border-border-subtle">Filters</h3>
-              <div className="flex flex-col gap-2 mb-5">
-                <label className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">Time Range</label>
-                <select
-                  className="custom-select w-full bg-bg-tertiary border border-border text-text-primary py-2.5 pr-10 pl-4 rounded-[var(--radius-sm)] text-sm cursor-pointer transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15"
-                  value={timeRange}
-                  onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-                >
-                  <option value="30d">Last 30 days</option>
-                  <option value="90d">Last 90 days</option>
-                  <option value="6m">Last 6 months</option>
-                  <option value="1y">Last year</option>
-                  <option value="all">All time</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">Activity Type</label>
-                <select
-                  className="custom-select w-full bg-bg-tertiary border border-border text-text-primary py-2.5 pr-10 pl-4 rounded-[var(--radius-sm)] text-sm cursor-pointer transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15"
-                  value={activityType}
-                  onChange={(e) => setActivityType(e.target.value as ActivityType)}
-                >
-                  <option value="all">All activities</option>
-                  <option value="Ride">Cycling (incl. Zwift)</option>
-                  <option value="Run">Running</option>
-                  <option value="VirtualRide">Zwift only</option>
-                </select>
-              </div>
-            </div>
-
             <div>
               <h3 className="text-xs text-text-muted uppercase tracking-wider font-semibold mb-4 pb-2 border-b border-border-subtle">User Profile</h3>
               <div className="flex flex-col gap-2 mb-5">
-                <label className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">Max HR</label>
+                <label htmlFor="settings-max-hr" className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">Max HR</label>
                 <div className="flex items-center gap-2">
                   <input
+                    id="settings-max-hr"
                     className="w-20 bg-bg-tertiary border border-border text-text-primary py-2 px-3 rounded-[var(--radius-sm)] text-sm transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15 data-value"
                     type="number"
                     min="100"
@@ -840,7 +869,7 @@ function DashboardLayout() {
                   />
                   <span className="text-sm text-text-secondary">bpm</span>
                 </div>
-                <span className="text-[0.65rem] text-text-muted">
+                <span className="text-[0.75rem] text-text-muted">
                   {maxHROverride
                     ? 'manual override'
                     : maxHRData.source === 'observed'
@@ -850,9 +879,10 @@ function DashboardLayout() {
               </div>
 
               <div className="flex flex-col gap-2 mb-5">
-                <label className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">Resting HR</label>
+                <label htmlFor="settings-resting-hr" className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">Resting HR</label>
                 <div className="flex items-center gap-2">
                   <input
+                    id="settings-resting-hr"
                     className="w-20 bg-bg-tertiary border border-border text-text-primary py-2 px-3 rounded-[var(--radius-sm)] text-sm transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15 data-value"
                     type="number"
                     min="30"
@@ -863,7 +893,7 @@ function DashboardLayout() {
                   />
                   <span className="text-sm text-text-secondary">bpm</span>
                 </div>
-                <span className="text-[0.65rem] text-text-muted">
+                <span className="text-[0.75rem] text-text-muted">
                   {restingHROverride
                     ? 'manual override'
                     : restingHRData.source === 'observed'
@@ -873,10 +903,11 @@ function DashboardLayout() {
               </div>
 
               <div className="flex flex-col gap-2 mb-5">
-                <label className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">
+                <label htmlFor="settings-birthday" className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">
                   Birthday{birthday ? ` (age ${age})` : ''}
                 </label>
                 <input
+                  id="settings-birthday"
                   className="w-full bg-bg-tertiary border border-border text-text-primary py-2.5 px-4 rounded-[var(--radius-sm)] text-sm transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15"
                   type="date"
                   value={birthday ?? ''}
@@ -886,8 +917,9 @@ function DashboardLayout() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">Gender</label>
+                <label htmlFor="settings-gender" className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">Gender</label>
                 <select
+                  id="settings-gender"
                   className="custom-select w-full bg-bg-tertiary border border-border text-text-primary py-2.5 pr-10 pl-4 rounded-[var(--radius-sm)] text-sm cursor-pointer transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15"
                   value={gender}
                   onChange={(e) => setGender(e.target.value as 'male' | 'female')}
@@ -931,14 +963,14 @@ function DashboardLayout() {
                       style={{ width: `${Math.round((syncProgress.current / syncProgress.total) * 100)}%` }}
                     />
                   </div>
-                  <p className="text-[0.7rem] text-text-muted mt-1">
+                  <p className="text-[0.75rem] text-text-muted mt-1">
                     {syncProgress.current} of {syncProgress.total} rides — downloading splits, route and power data
                   </p>
                 </div>
               )}
               {!syncProgress && syncMessage && (
                 <p
-                  className={`text-[0.7rem] mt-2 leading-relaxed ${
+                  className={`text-[0.75rem] mt-2 leading-relaxed ${
                     syncMessage.tone === 'error' ? 'text-red-400' : 'text-accent'
                   }`}
                 >
@@ -946,7 +978,7 @@ function DashboardLayout() {
                 </p>
               )}
               {!syncProgress && !syncMessage && (
-                <p className="text-[0.7rem] text-text-muted mt-2 leading-relaxed">
+                <p className="text-[0.75rem] text-text-muted mt-2 leading-relaxed">
                   Fetches your full intervals.icu history and downloads detailed data (splits, route, power curves) for new activities.
                 </p>
               )}
@@ -965,8 +997,13 @@ function DashboardLayout() {
                 </svg>
                 Docs — how the data flows
               </Link>
-              <p className="text-[0.7rem] text-text-muted mt-2 leading-relaxed">
+              <p className="text-[0.75rem] text-text-muted mt-2 leading-relaxed">
                 Sync pipeline, what&apos;s cached in Supabase, and what each page computes.
+                For what CTL, TSB or NP mean, see the{' '}
+                <Link to="/glossary" onClick={() => setSidebarOpen(false)} className="text-accent no-underline hover:underline">
+                  glossary
+                </Link>
+                .
               </p>
             </div>
           </div>

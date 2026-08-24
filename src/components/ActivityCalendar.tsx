@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { type StravaActivity, metersToKm, secondsToHMS } from '~/lib/strava'
+import { type StravaActivity, metersToKm } from '~/lib/strava'
 import { useDashboard } from '~/lib/dashboard-context'
 import { fitnessSeries } from '~/lib/fitness'
 import {
@@ -10,7 +10,14 @@ import {
   type CalendarDay,
   type CalendarMetric,
 } from '~/lib/activity-calendar'
-import { sectionCard } from '~/lib/styles'
+import { sectionCard, cardTitle } from '~/lib/styles'
+import {
+  formatNumber,
+  formatDistance,
+  formatElevation,
+  formatClock,
+  formatDateWithWeekday,
+} from '~/lib/format'
 import { pageRange } from '~/components/Pagination'
 
 interface ActivityCalendarProps {
@@ -114,20 +121,46 @@ function YearPager({
   )
 }
 
-function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Tile({
+  label,
+  value,
+  hint,
+  comparison,
+}: {
+  label: string
+  value: string
+  hint?: string
+  comparison?: string
+}) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[0.65rem] uppercase tracking-wider font-semibold text-text-muted">{label}</span>
+      <span className="text-[0.75rem] uppercase tracking-wider font-semibold text-text-muted">{label}</span>
       <span className="data-value text-xl font-medium text-text-primary leading-tight">{value}</span>
-      {hint && <span className="text-[0.65rem] text-text-muted">{hint}</span>}
+      {comparison && (
+        <span className="text-[0.75rem] text-text-secondary data-value">{comparison}</span>
+      )}
+      {hint && <span className="text-[0.75rem] text-text-muted">{hint}</span>}
     </div>
   )
+}
+
+/** `+12% vs 2025`, or nothing when last year has no comparable total. */
+function comparisonLabel(current: number, previous: number, previousYear: string): string | undefined {
+  if (previous <= 0) return undefined
+  const change = Math.round(((current - previous) / previous) * 100)
+  const sign = change > 0 ? '+' : ''
+  return `${sign}${change}% vs ${previousYear}`
 }
 
 export function ActivityCalendar({ activities }: ActivityCalendarProps) {
   const { profile } = useDashboard()
   const [metric, setMetric] = useState<CalendarMetric>('load')
+  // `pinned` survives a mouse leaving the cell, which is the only way a touch
+  // device can reach the detail line at all — the calendar used to instruct
+  // the reader to hover on a device that cannot.
   const [hovered, setHovered] = useState<CalendarDay | null>(null)
+  const [pinned, setPinned] = useState<CalendarDay | null>(null)
+  const gridScroller = useRef<HTMLDivElement>(null)
 
   const years = useMemo(() => {
     const set = new Set<string>()
@@ -151,8 +184,33 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
     return buildActivityCalendar(activities, fitness, from, to, metric)
   }, [activities, fitness, year, metric])
 
+  // Same slice of the previous year, so the summary strip can say whether this
+  // season is ahead. Twelve years of history sat behind the year pager with
+  // nothing comparing them.
+  const previousYear = String(Number(year) - 1)
+  const previous = useMemo(() => {
+    if (!years.includes(previousYear)) return null
+    const now = new Date()
+    const isCurrentYear = year === String(now.getFullYear())
+    const from = new Date(`${previousYear}-01-01T00:00:00`)
+    const to = isCurrentYear
+      ? new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+      : new Date(`${previousYear}-12-31T00:00:00`)
+    return buildActivityCalendar(activities, fitness, from, to, metric).summary
+  }, [activities, fitness, year, previousYear, years, metric])
+
   const { summary } = calendar
   const consistency = summary.days > 0 ? Math.round((summary.activeDays / summary.days) * 100) : 0
+  const detail = pinned ?? hovered
+
+  // The current year opens on January otherwise, so reaching today means
+  // scrolling right past nine months of history every time.
+  useEffect(() => {
+    const scroller = gridScroller.current
+    if (!scroller) return
+    const isCurrentYear = year === String(new Date().getFullYear())
+    scroller.scrollLeft = isCurrentYear ? scroller.scrollWidth : 0
+  }, [year])
 
   if (activities.length === 0) return null
 
@@ -160,7 +218,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
     <div className={sectionCard}>
       <div className="flex justify-between items-start gap-4 mb-6 flex-wrap">
         <div>
-          <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">Training calendar</h3>
+          <h3 className={cardTitle}>Training calendar</h3>
           <p className="text-[0.8rem] text-text-secondary mt-0.5">
             {summary.activeDays} active {summary.activeDays === 1 ? 'day' : 'days'} of {summary.days}
             {' · '}
@@ -175,7 +233,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
                 key={m.id}
                 onClick={() => setMetric(m.id)}
                 aria-pressed={metric === m.id}
-                className={`text-[0.7rem] font-semibold px-2.5 py-1 rounded-[var(--radius-sm)] transition-colors ${
+                className={`text-[0.75rem] font-semibold px-2.5 py-1 rounded-[var(--radius-sm)] transition-colors ${
                   metric === m.id ? 'bg-accent text-bg-primary' : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
@@ -193,11 +251,11 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
           leave half the card empty. `minmax(0.5rem, 1fr)` keeps a hit target
           worth aiming at on narrow screens, and the container scrolls rather
           than squashing below that. */}
-      <div className="overflow-x-auto pb-1">
-        <div className="flex flex-col gap-1 min-w-[560px]">
+      <div ref={gridScroller} className="overflow-x-auto pb-1">
+        <div className="flex flex-col gap-1 min-w-[680px]">
           {/* Month axis */}
           <div
-            className="grid gap-[3px] ml-[34px]"
+            className="grid gap-[3px] ml-[37px]"
             style={{ gridTemplateColumns: `repeat(${calendar.weeks.length}, minmax(0.5rem, 1fr))` }}
           >
             {calendar.weeks.map((_, i) => {
@@ -205,7 +263,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
               return (
                 <div key={i} className="min-w-0">
                   {label && (
-                    <span className="text-[0.6rem] text-text-muted whitespace-nowrap">{label.label}</span>
+                    <span className="text-[0.75rem] text-text-muted whitespace-nowrap">{label.label}</span>
                   )}
                 </div>
               )
@@ -215,10 +273,10 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
           <div className="flex gap-[3px]">
             {/* Weekday axis — every other row, so the labels don't crowd.
                 Rows share the cells' aspect-ratio height via the same grid. */}
-            <div className="grid grid-rows-7 gap-[3px] w-[31px] shrink-0">
+            <div className="grid grid-rows-7 gap-[3px] w-[34px] shrink-0">
               {DAY_LABELS.map((d, i) => (
                 <div key={d} className="flex items-center">
-                  {i % 2 === 1 && <span className="text-[0.6rem] text-text-muted leading-none">{d}</span>}
+                  {i % 2 === 1 && <span className="text-[0.75rem] text-text-muted leading-none">{d}</span>}
                 </div>
               ))}
             </div>
@@ -245,7 +303,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
                     )
                   }
 
-                  const isHovered = hovered?.date === day.date
+                  const isHovered = hovered?.date === day.date || pinned?.date === day.date
                   return (
                     <button
                       key={`${wi}-${di}`}
@@ -254,6 +312,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
                       onMouseLeave={() => setHovered(null)}
                       onFocus={() => setHovered(day)}
                       onBlur={() => setHovered(null)}
+                      onClick={() => setPinned((p) => (p?.date === day.date ? null : day))}
                       aria-label={`${day.date}: ${day.count} ${day.count === 1 ? 'activity' : 'activities'}, ${formatHours(day.movingTime)}, ${Math.round(day.load)} load`}
                       className="aspect-square w-full rounded-[3px] transition-transform hover:scale-110 focus:scale-110 focus:outline-none"
                       style={{
@@ -268,58 +327,69 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
             </div>
           </div>
 
-          {/* Legend. Named bands rather than "Less → More": the steps are fixed
-              sizes, so they can say what they mean — and Easy/Moderate/Solid/
-              Hard/Epic are the same words the activity list badges rides with. */}
-          <div className="flex items-center gap-x-4 gap-y-1 ml-[34px] mt-2 flex-wrap">
-            {LEVEL_FILL.map((fill, i) => (
-              <span key={i} className="flex items-center gap-1.5">
-                <span className="size-3 rounded-[3px] shrink-0" style={{ backgroundColor: fill }} />
-                <span className="text-[0.65rem] text-text-muted">{LEVEL_LABELS[i]}</span>
-              </span>
-            ))}
-          </div>
         </div>
       </div>
 
-      {/* Hover detail — reserves one line so the layout doesn't jump, and grows
-          for a day with several activities */}
+      {/* Legend. Named bands rather than "Less → More": the steps are fixed
+          sizes, so they can say what they mean — and Easy/Moderate/Solid/
+          Hard/Epic are the same words the activity list badges rides with.
+          Outside the scroller so it wraps on a phone rather than clipping
+          mid-word. */}
+      <div className="flex items-center gap-x-4 gap-y-1 mt-2 flex-wrap">
+        {LEVEL_FILL.map((fill, i) => (
+          <span key={i} className="flex items-center gap-1.5">
+            <span className="size-3 rounded-[3px] shrink-0" style={{ backgroundColor: fill }} />
+            <span className="text-[0.75rem] text-text-muted">{LEVEL_LABELS[i]}</span>
+          </span>
+        ))}
+      </div>
+
+      {/* Day detail — reserves one line so the layout doesn't jump, and grows
+          for a day with several activities. Click pins a day, which is how a
+          touch device reaches this at all. */}
       <div className="mt-4 min-h-[2.25rem] border-t border-border-subtle pt-3">
-        {hovered ? (
+        {detail ? (
           <div>
             <div className="flex items-baseline gap-3 flex-wrap">
               <span className="text-sm font-semibold text-text-primary">
-                {new Date(`${hovered.date}T00:00:00`).toLocaleDateString(undefined, {
-                  weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-                })}
+                {formatDateWithWeekday(`${detail.date}T00:00:00`)}
               </span>
-              {hovered.count === 0 ? (
+              {detail.count === 0 ? (
                 <span className="text-xs text-text-muted">Rest day</span>
               ) : (
                 <span className="text-xs text-text-secondary data-value">
-                  {formatHours(hovered.movingTime)} · {metersToKm(hovered.distance).toFixed(1)} km
-                  {hovered.elevation > 0 && ` · ${Math.round(hovered.elevation)} m`}
-                  {hovered.load > 0 && ` · ${Math.round(hovered.load)} load`}
+                  {formatHours(detail.movingTime)} · {formatDistance(metersToKm(detail.distance))} km
+                  {detail.elevation > 0 && ` · ${formatElevation(detail.elevation)} m`}
+                  {detail.load > 0 && ` · ${formatNumber(detail.load)} load`}
                 </span>
               )}
+              {pinned && (
+                <button
+                  type="button"
+                  onClick={() => setPinned(null)}
+                  className="text-[0.75rem] text-text-muted hover:text-text-secondary cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
             </div>
-            {hovered.count > 0 && (
+            {detail.count > 0 && (
               <div className="flex flex-col gap-0.5 mt-1">
-                {hovered.activities.map((a) => (
+                {detail.activities.map((a) => (
                   <Link
                     key={a.id}
                     to="/activities/$activityId"
                     params={{ activityId: String(a.id) }}
                     className="text-xs text-text-muted hover:text-accent no-underline w-fit"
                   >
-                    {a.name} <span className="data-value">· {secondsToHMS(a.moving_time)}</span>
+                    {a.name} <span className="data-value">· {formatClock(a.moving_time)}</span>
                   </Link>
                 ))}
               </div>
             )}
           </div>
         ) : (
-          <p className="text-xs text-text-muted">Hover a day for detail.</p>
+          <p className="text-xs text-text-muted">Select a day for detail.</p>
         )}
       </div>
 
@@ -327,23 +397,27 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mt-5 pt-5 border-t border-border-subtle">
         <Tile
           label="Activities"
-          value={String(summary.activities)}
+          value={formatNumber(summary.activities)}
+          comparison={previous ? comparisonLabel(summary.activities, previous.activities, previousYear) : undefined}
           hint={`${consistency}% of days active`}
         />
         <Tile
           label="Time"
           value={formatHours(summary.movingTime)}
+          comparison={previous ? comparisonLabel(summary.movingTime, previous.movingTime, previousYear) : undefined}
           hint={summary.activeDays > 0 ? `${formatHours(Math.round(summary.movingTime / summary.activeDays))} per active day` : undefined}
         />
         <Tile
           label="Distance"
-          value={`${Math.round(metersToKm(summary.distance)).toLocaleString()} km`}
-          hint={`${Math.round(summary.elevation).toLocaleString()} m climbed`}
+          value={`${formatDistance(metersToKm(summary.distance), 0)} km`}
+          comparison={previous ? comparisonLabel(summary.distance, previous.distance, previousYear) : undefined}
+          hint={`${formatElevation(summary.elevation)} m climbed`}
         />
         <Tile
           label="Load"
-          value={Math.round(summary.load).toLocaleString()}
-          hint={summary.longestStreak > 0 ? `${summary.longestStreak}-day best streak` : undefined}
+          value={formatNumber(summary.load)}
+          comparison={previous ? comparisonLabel(summary.load, previous.load, previousYear) : undefined}
+          hint={summary.longestStreak > 0 ? `${formatNumber(summary.longestStreak)}-day best streak` : undefined}
         />
       </div>
     </div>

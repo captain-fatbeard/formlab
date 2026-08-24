@@ -6,18 +6,19 @@ import { PerformanceCharts } from '~/components/PerformanceCharts'
 import { RunningMetrics } from '~/components/RunningMetrics'
 import { RunningCharts } from '~/components/RunningCharts'
 import { isRun } from '~/lib/tss'
+import { PageHeader } from '~/components/PageHeader'
+import { sectionHeading } from '~/lib/styles'
 
 export const Route = createFileRoute('/_dashboard/performance')({
+  head: () => ({ meta: [{ title: 'Performance · FormLab' }] }),
   component: PerformancePage,
 })
 
 function SectionHeading({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
-    <h2 className="text-xl font-bold flex items-center gap-3">
-      <span className="size-8 bg-bg-secondary border border-border-subtle rounded-[var(--radius-sm)] flex items-center justify-center">
-        {icon}
-      </span>
-      <span className="bg-linear-to-br from-accent to-teal-300 bg-clip-text text-transparent">{title}</span>
+    <h2 className={`${sectionHeading} flex items-center gap-2.5`}>
+      <span className="text-accent shrink-0" aria-hidden="true">{icon}</span>
+      {title}
     </h2>
   )
 }
@@ -29,6 +30,11 @@ function PerformancePage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <PageHeader
+        title="Performance"
+        description="Power, efficiency and pace — what your training has produced."
+        count={statsActivities.length}
+      />
       <SectionHeading
         title="Cycling"
         icon={

@@ -1,3 +1,5 @@
+import { formatNumber } from '~/lib/format'
+
 interface PaginationProps {
   page: number
   pageSize: number
@@ -39,8 +41,7 @@ export function Pagination({ page, pageSize, total, onPageChange }: PaginationPr
   return (
     <div className="flex items-center justify-between gap-3 mt-4 max-md:flex-col max-md:items-stretch max-md:gap-2">
       <div className="text-xs text-text-muted">
-        Showing {start.toLocaleString('da-DK')}–{end.toLocaleString('da-DK')} of{' '}
-        {total.toLocaleString('da-DK')}
+        Showing {formatNumber(start)}–{formatNumber(end)} of {formatNumber(total)}
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
         <button

@@ -1,6 +1,7 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/_dashboard/docs')({
+  head: () => ({ meta: [{ title: 'How FormLab works · FormLab' }] }),
   component: DocsPage,
 })
 
@@ -372,7 +373,8 @@ function DocsPage() {
         </h1>
         <p className="text-text-secondary text-sm mt-2 max-w-[70ch]">
           Where the numbers come from: what is fetched, what is cached, what is computed on the fly, and
-          which rules keep the activity cache honest.
+          which rules keep the activity cache honest. For what the metrics themselves mean, see the{' '}
+          <Link to="/glossary" className="text-accent no-underline hover:underline">glossary</Link>.
         </p>
       </header>
 
