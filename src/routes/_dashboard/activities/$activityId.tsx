@@ -2,19 +2,32 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
 import { useDashboard } from '~/lib/dashboard-context'
 import { isIntervalsActivityId } from '~/lib/intervals'
+import { type ActivityDetailsJson, metersToKm } from '~/lib/strava'
 import {
-  type ActivityDetailsJson,
-  metersToKm,
-  secondsToHMS,
-  calculatePace,
-  formatPace,
-} from '~/lib/strava'
+  formatNumber,
+  formatDistance,
+  formatElevation,
+  formatDuration,
+  formatClock,
+  formatDateFull,
+  formatPacePerKm,
+  formatSpeed,
+  formatTempo,
+} from '~/lib/format'
+import {
+  groupSplits,
+  splitSizeOptions,
+  defaultSplitSize,
+  fastestAndSlowest,
+} from '~/lib/splits'
+import { MetricTerm } from '~/components/MetricTerm'
+import { sectionHeading, cardTitle, buttonSecondary } from '~/lib/styles'
 import {
   fetchCachedActivityDetails,
   clearCachedActivityDetails,
   isSupabaseConfigured,
 } from '~/lib/storage/supabase-client'
-import { formatDateFull, chartTheme, tooltipStyle } from '~/lib/chart-theme'
+import { chartTheme, tooltipStyle } from '~/lib/chart-theme'
 import { activityTypeClasses } from '~/lib/activities'
 import { ActivityMap } from '~/components/ActivityMap'
 import {
@@ -31,8 +44,12 @@ import {
 } from 'recharts'
 
 export const Route = createFileRoute('/_dashboard/activities/$activityId')({
+  head: () => ({ meta: [{ title: 'Activity · FormLab' }] }),
   component: ActivityDetailPage,
 })
+
+/** Rows shown before the reader asks for the rest. */
+const SPLITS_COLLAPSED = 10
 
 const workoutTypeLabels: Record<string, Record<number, string>> = {
   Run: { 1: 'Race', 2: 'Long Run', 3: 'Workout' },
@@ -50,6 +67,10 @@ function ActivityDetailPage() {
   const [details, setDetails] = useState<ActivityDetailsJson | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  // null means "whatever suits a ride this long" — resolved once the distance
+  // is known, so a 164 km ride opens grouped and a 40 km one opens per km.
+  const [splitSizeOverride, setSplitSizeOverride] = useState<number | null>(null)
+  const [showAllSplits, setShowAllSplits] = useState(false)
 
   // Find summary data from context
   const summary = activities.find((a) => a.id === Number(activityId))
@@ -126,9 +147,10 @@ function ActivityDetailPage() {
   }
 
   const isRun = summary.type === 'Run'
-  const paceOrSpeed = isRun
-    ? formatPace(calculatePace(summary.distance, summary.moving_time))
-    : `${(summary.average_speed * 3.6).toFixed(1)} km/h`
+  // Pace is a running unit. A 2:11/km "pace" on a bike is a correct number
+  // shown through the wrong instrument — 27.5 km/h is the same fact, readable.
+  const sport = isRun ? ('run' as const) : ('ride' as const)
+  const paceOrSpeed = formatTempo(summary.distance, summary.moving_time, sport)
 
   // Chart data: splits → pace/speed + elevation + HR + power
   const splitsChartData = useMemo(() => {
@@ -146,6 +168,18 @@ function ActivityDetailPage() {
       }
     })
   }, [details?.splits_metric, details?.power_per_km])
+
+  // A 164 km ride produced a 164-row table with no way to collapse or regroup
+  // it — roughly eight thousand pixels of splits below the charts.
+  const totalKm = metersToKm(summary.distance)
+  const sizeOptions = splitSizeOptions(totalKm)
+  const splitSize = splitSizeOverride ?? defaultSplitSize(totalKm)
+  const splitRows = useMemo(
+    () => groupSplits(details?.splits_metric ?? [], splitSize, details?.power_per_km),
+    [details?.splits_metric, details?.power_per_km, splitSize]
+  )
+  const splitExtremes = useMemo(() => fastestAndSlowest(splitRows), [splitRows])
+  const visibleSplits = showAllSplits ? splitRows : splitRows.slice(0, SPLITS_COLLAPSED)
 
   const hasHrSplits = splitsChartData.some((d) => d.hr !== null)
   const hasPowerSplits = splitsChartData.some((d) => d.power !== null)
@@ -167,7 +201,7 @@ function ActivityDetailPage() {
       <div className="bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-text-primary mb-1">{summary.name}</h1>
+            <h1 className="text-[2rem] font-semibold tracking-tight text-text-primary leading-tight mb-1 max-md:text-2xl">{summary.name}</h1>
             <p className="text-text-muted text-sm">
               {formatDateFull(summary.start_date_local)}
               {details?.device_name && ` \u00B7 ${details.device_name}`}
@@ -179,7 +213,7 @@ function ActivityDetailPage() {
             <button
               onClick={handleRefresh}
               disabled={refreshing || loading}
-              className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.7rem] font-semibold text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-50"
               title="Re-fetch from intervals.icu"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? 'animate-spin' : ''}>
@@ -192,11 +226,11 @@ function ActivityDetailPage() {
             </button>
             )}
             {details?.workout_type != null && details.workout_type > 0 && (
-              <span className="inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.7rem] font-semibold uppercase tracking-wide bg-warning-muted text-warning">
+              <span className="inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold uppercase tracking-wide bg-warning-muted text-warning">
                 {workoutTypeLabel(summary.type, details.workout_type)}
               </span>
             )}
-            <span className={`inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.7rem] font-semibold uppercase tracking-wide ${activityTypeClasses[summary.type.toLowerCase()] || 'bg-bg-tertiary text-text-secondary'}`}>
+            <span className={`inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold uppercase tracking-wide ${activityTypeClasses[summary.type.toLowerCase()] || 'bg-bg-tertiary text-text-secondary'}`}>
               {summary.type === 'VirtualRide' ? 'Zwift' : summary.type}
             </span>
           </div>
@@ -206,57 +240,71 @@ function ActivityDetailPage() {
         )}
       </div>
 
-      {/* Stats grid */}
+      {/* Headline figures. Distance, time and speed are what the ride was;
+          temperature and suffer score are footnotes, and used to be set at
+          exactly the same size, colour and shape as the headline. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Distance" value={`${formatDistance(metersToKm(summary.distance), 2)} km`} headline />
+        <StatCard label="Moving time" value={formatDuration(summary.moving_time)} headline />
+        <StatCard label={isRun ? 'Pace' : 'Speed'} value={paceOrSpeed} headline />
+        <StatCard label="Elevation" value={`${formatElevation(summary.total_elevation_gain)} m`} headline />
+      </div>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Distance" value={`${metersToKm(summary.distance).toFixed(2)} km`} />
-        <StatCard label="Moving Time" value={secondsToHMS(summary.moving_time)} />
         {summary.elapsed_time > summary.moving_time + 30 && (
-          <StatCard label="Elapsed Time" value={secondsToHMS(summary.elapsed_time)} />
+          <StatCard label="Elapsed time" value={formatDuration(summary.elapsed_time)} />
         )}
-        <StatCard label={isRun ? 'Pace' : 'Speed'} value={paceOrSpeed} />
-        <StatCard label="Max Speed" value={isRun
-          ? formatPace((1 / summary.max_speed) * 1000)
-          : `${(summary.max_speed * 3.6).toFixed(1)} km/h`}
+        <StatCard
+          label={isRun ? 'Max pace' : 'Max speed'}
+          value={isRun ? formatPacePerKm((1 / summary.max_speed) * 1000) : formatSpeed(summary.max_speed * 3.6)}
         />
-        <StatCard label="Elevation" value={`${summary.total_elevation_gain.toFixed(0)} m`} />
         {summary.average_heartrate && (
-          <StatCard label="Avg HR" value={`${Math.round(summary.average_heartrate)} bpm`} />
+          <StatCard label="Avg HR" value={`${formatNumber(summary.average_heartrate)} bpm`} />
         )}
         {summary.max_heartrate && (
-          <StatCard label="Max HR" value={`${Math.round(summary.max_heartrate)} bpm`} />
+          <StatCard label="Max HR" value={`${formatNumber(summary.max_heartrate)} bpm`} />
         )}
         {summary.average_watts && (
           <StatCard
-            label={details?.power_estimated ? 'Est. Avg Power' : 'Avg Power'}
-            value={`${Math.round(summary.average_watts)} W`}
+            label={details?.power_estimated ? 'Est. avg power' : 'Avg power'}
+            value={`${formatNumber(summary.average_watts)} W`}
           />
         )}
         {!summary.average_watts && details?.estimated_avg_watts && (
-          <StatCard label="Est. Avg Power" value={`${Math.round(details.estimated_avg_watts)} W`} />
+          <StatCard label="Est. avg power" value={`${formatNumber(details.estimated_avg_watts)} W`} />
         )}
         {summary.max_watts && (
-          <StatCard label="Max Power" value={`${Math.round(summary.max_watts)} W`} />
+          <StatCard label="Max power" value={`${formatNumber(summary.max_watts)} W`} />
         )}
         {summary.weighted_average_watts && (
-          <StatCard label="NP" value={`${Math.round(summary.weighted_average_watts)} W`} />
+          <StatCard
+            label={<MetricTerm id="np">NP</MetricTerm>}
+            value={`${formatNumber(summary.weighted_average_watts)} W`}
+          />
         )}
         {summary.average_cadence && (
-          <StatCard label={isRun ? 'Cadence' : 'Cadence'} value={`${Math.round(isRun ? summary.average_cadence * 2 : summary.average_cadence)} ${isRun ? 'spm' : 'rpm'}`} />
+          <StatCard
+            label="Cadence"
+            value={`${formatNumber(isRun ? summary.average_cadence * 2 : summary.average_cadence)} ${isRun ? 'spm' : 'rpm'}`}
+          />
         )}
         {details?.calories != null && details.calories > 0 && (
-          <StatCard label="Calories" value={`${Math.round(details.calories)}`} />
+          <StatCard label="Calories" value={formatNumber(details.calories)} />
         )}
         {summary.kilojoules != null && summary.kilojoules > 0 && (
-          <StatCard label="Energy" value={`${Math.round(summary.kilojoules)} kJ`} />
+          <StatCard label="Energy" value={`${formatNumber(summary.kilojoules)} kJ`} />
         )}
         {details?.average_temp != null && (
-          <StatCard label="Temperature" value={`${Math.round(details.average_temp)}\u00B0C`} />
+          <StatCard label="Temperature" value={`${formatNumber(details.average_temp)}\u00B0C`} />
         )}
         {details?.perceived_exertion != null && details.perceived_exertion > 0 && (
           <StatCard label="RPE" value={`${details.perceived_exertion} / 10`} />
         )}
         {summary.suffer_score != null && summary.suffer_score > 0 && (
-          <StatCard label="Suffer Score" value={`${Math.round(summary.suffer_score)}`} />
+          <StatCard
+            label={<MetricTerm id="suffer-score">Suffer score</MetricTerm>}
+            value={formatNumber(summary.suffer_score)}
+          />
         )}
       </div>
 
@@ -298,7 +346,7 @@ function ActivityDetailPage() {
       {/* Route map */}
       {details?.summary_polyline && (
         <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-3">Route</h2>
+          <h2 className={`${sectionHeading} mb-3`}>Route</h2>
           <ActivityMap polyline={details.summary_polyline} />
         </div>
       )}
@@ -316,8 +364,8 @@ function ActivityDetailPage() {
         <div className="flex flex-col gap-6">
           {/* Pace/Speed + Elevation chart */}
           <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4">
-            <h3 className="text-lg font-semibold mb-5 text-text-primary">
-              {isRun ? 'Pace' : 'Speed'} &amp; Elevation per km
+            <h3 className={`${cardTitle} mb-5`}>
+              {isRun ? 'Pace' : 'Speed'} &amp; elevation per km
             </h3>
             <ResponsiveContainer width="100%" height={280}>
               <ComposedChart data={splitsChartData}>
@@ -391,7 +439,7 @@ function ActivityDetailPage() {
           {/* Heart Rate per km chart */}
           {hasHrSplits && (
             <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4">
-              <h3 className="text-lg font-semibold mb-5 text-text-primary">Heart Rate per km</h3>
+              <h3 className={`${cardTitle} mb-5`}>Heart rate per km</h3>
               <ResponsiveContainer width="100%" height={280}>
                 <AreaChart data={splitsChartData}>
                   <defs>
@@ -438,7 +486,7 @@ function ActivityDetailPage() {
       {/* Power per km chart */}
       {hasPowerSplits && splitsChartData.length > 1 && (
         <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4">
-          <h3 className="text-lg font-semibold mb-5 text-text-primary">Power per km</h3>
+          <h3 className={`${cardTitle} mb-5`}>Power per km</h3>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={splitsChartData}>
               <defs>
@@ -483,14 +531,14 @@ function ActivityDetailPage() {
       {/* Best efforts (runs) */}
       {details?.best_efforts && details.best_efforts.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-3">Best Efforts</h2>
+          <h2 className={`${sectionHeading} mb-3`}>Best efforts</h2>
           <div className="overflow-x-auto bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
                   <Th>Distance</Th>
                   <Th>Time</Th>
-                  <Th>Pace</Th>
+                  <Th>{isRun ? 'Pace' : 'Speed'}</Th>
                   <Th>Achievement</Th>
                 </tr>
               </thead>
@@ -498,8 +546,8 @@ function ActivityDetailPage() {
                 {details.best_efforts.map((effort) => (
                   <tr key={effort.id} className="transition-colors hover:[&_td]:bg-bg-tertiary last:[&_td]:border-b-0">
                     <Td className="font-semibold text-text-primary">{effort.name}</Td>
-                    <Td>{secondsToHMS(effort.elapsed_time)}</Td>
-                    <Td>{formatPace(calculatePace(effort.distance, effort.elapsed_time))}</Td>
+                    <Td className="data-value">{formatClock(effort.elapsed_time)}</Td>
+                    <Td className="data-value">{formatTempo(effort.distance, effort.elapsed_time, sport)}</Td>
                     <Td>
                       <AchievementBadges achievements={effort.achievements} />
                     </Td>
@@ -514,44 +562,96 @@ function ActivityDetailPage() {
       {/* Splits table */}
       {details?.splits_metric && details.splits_metric.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-3">Splits</h2>
+          <div className="flex items-end justify-between gap-3 mb-3 flex-wrap">
+            <div>
+              <h2 className={sectionHeading}>Splits</h2>
+              <p className="text-[0.8125rem] text-text-muted mt-0.5">
+                {splitRows.length} {splitRows.length === 1 ? 'row' : 'rows'}
+                {splitSize > 1 && ` · ${splitSize} km blocks`}
+                {splitExtremes.fastest >= 0 && ' · fastest and slowest marked'}
+              </p>
+            </div>
+
+            {sizeOptions.length > 1 && (
+              <div className="flex gap-1 bg-bg-tertiary rounded-[var(--radius-sm)] p-0.5">
+                {sizeOptions.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => { setSplitSizeOverride(size); setShowAllSplits(false) }}
+                    aria-pressed={size === splitSize}
+                    className={`text-[0.75rem] font-semibold px-2.5 py-1 rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
+                      size === splitSize ? 'bg-accent text-bg-primary' : 'text-text-muted hover:text-text-secondary'
+                    }`}
+                  >
+                    {size === 1 ? 'Per km' : `${size} km`}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="overflow-x-auto bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
                   <Th>Km</Th>
-                  <Th>Pace</Th>
+                  <Th>{isRun ? 'Pace' : 'Speed'}</Th>
                   <Th>Time</Th>
-                  <Th>Elev</Th>
-                  {details.splits_metric.some((s) => s.average_heartrate) && <Th>HR</Th>}
+                  <Th>Elevation</Th>
+                  {splitRows.some((r) => r.heartrate != null) && <Th>HR</Th>}
+                  {splitRows.some((r) => r.power != null) && <Th>Power</Th>}
                 </tr>
               </thead>
               <tbody>
-                {details.splits_metric.map((split) => (
-                  <tr key={split.split} className="transition-colors hover:[&_td]:bg-bg-tertiary last:[&_td]:border-b-0">
-                    <Td>{split.split}</Td>
-                    <Td>{formatPace(calculatePace(split.distance, split.moving_time))}</Td>
-                    <Td>{secondsToHMS(split.moving_time)}</Td>
-                    <Td>
-                      <span className={split.elevation_difference > 0 ? 'text-success' : split.elevation_difference < 0 ? 'text-danger' : ''}>
-                        {split.elevation_difference > 0 ? '+' : ''}{split.elevation_difference.toFixed(0)} m
-                      </span>
+                {visibleSplits.map((row, i) => (
+                  <tr key={row.label} className="transition-colors hover:[&_td]:bg-bg-tertiary last:[&_td]:border-b-0">
+                    <Td className="data-value">{row.label}</Td>
+                    <Td className="data-value">
+                      {formatTempo(row.distance, row.movingTime, sport)}
+                      {i === splitExtremes.fastest && (
+                        <span className="ml-2 text-[0.75rem] text-accent font-semibold">fastest</span>
+                      )}
+                      {i === splitExtremes.slowest && (
+                        <span className="ml-2 text-[0.75rem] text-text-muted font-semibold">slowest</span>
+                      )}
                     </Td>
-                    {details.splits_metric.some((s) => s.average_heartrate) && (
-                      <Td>{split.average_heartrate ? `${Math.round(split.average_heartrate)} bpm` : '-'}</Td>
+                    <Td className="data-value">{formatClock(row.movingTime)}</Td>
+                    {/* No red for a descent: going downhill is not an error
+                        state, and `-0 m` was being rendered for flat ground. */}
+                    <Td className="data-value text-text-secondary">
+                      {row.elevation > 0.5 ? '+' : ''}{formatElevation(row.elevation)} m
+                    </Td>
+                    {splitRows.some((r) => r.heartrate != null) && (
+                      <Td className="data-value">{row.heartrate != null ? `${formatNumber(row.heartrate)} bpm` : '–'}</Td>
+                    )}
+                    {splitRows.some((r) => r.power != null) && (
+                      <Td className="data-value">{row.power != null ? `${formatNumber(row.power)} W` : '–'}</Td>
                     )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {splitRows.length > SPLITS_COLLAPSED && (
+            <button
+              type="button"
+              onClick={() => setShowAllSplits((v) => !v)}
+              className={`${buttonSecondary} mt-3`}
+            >
+              {showAllSplits
+                ? `Show first ${SPLITS_COLLAPSED}`
+                : `Show all ${formatNumber(splitRows.length)} rows`}
+            </button>
+          )}
         </div>
       )}
 
       {/* Laps table */}
       {details?.laps && details.laps.length > 1 && (
         <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-3">Laps</h2>
+          <h2 className={`${sectionHeading} mb-3`}>Laps</h2>
           <div className="overflow-x-auto bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle">
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -567,19 +667,17 @@ function ActivityDetailPage() {
               <tbody>
                 {details.laps.map((lap, i) => (
                   <tr key={lap.id} className="transition-colors hover:[&_td]:bg-bg-tertiary last:[&_td]:border-b-0">
-                    <Td>{i + 1}</Td>
-                    <Td>{metersToKm(lap.distance).toFixed(2)} km</Td>
-                    <Td>{secondsToHMS(lap.moving_time)}</Td>
-                    <Td>
-                      {isRun
-                        ? formatPace(calculatePace(lap.distance, lap.moving_time))
-                        : `${(lap.average_speed * 3.6).toFixed(1)} km/h`}
+                    <Td className="data-value">{i + 1}</Td>
+                    <Td className="data-value">{formatDistance(metersToKm(lap.distance), 2)} km</Td>
+                    <Td className="data-value">{formatClock(lap.moving_time)}</Td>
+                    <Td className="data-value">
+                      {formatTempo(lap.distance, lap.moving_time, sport)}
                     </Td>
                     {details.laps.some((l) => l.average_heartrate) && (
-                      <Td>{lap.average_heartrate ? `${Math.round(lap.average_heartrate)} bpm` : '-'}</Td>
+                      <Td className="data-value">{lap.average_heartrate ? `${formatNumber(lap.average_heartrate)} bpm` : '–'}</Td>
                     )}
                     {details.laps.some((l) => l.average_watts) && (
-                      <Td>{lap.average_watts ? `${Math.round(lap.average_watts)} W` : '-'}</Td>
+                      <Td className="data-value">{lap.average_watts ? `${formatNumber(lap.average_watts)} W` : '–'}</Td>
                     )}
                   </tr>
                 ))}
@@ -592,7 +690,7 @@ function ActivityDetailPage() {
       {/* Segment efforts */}
       {details?.segment_efforts && details.segment_efforts.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-3">Segments</h2>
+          <h2 className={`${sectionHeading} mb-3`}>Segments</h2>
           <div className="overflow-x-auto bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle">
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -608,14 +706,18 @@ function ActivityDetailPage() {
               <tbody>
                 {details.segment_efforts.map((seg) => (
                   <tr key={seg.id} className="transition-colors hover:[&_td]:bg-bg-tertiary last:[&_td]:border-b-0">
-                    <Td className="font-semibold text-text-primary max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">{seg.name}</Td>
-                    <Td>{metersToKm(seg.distance).toFixed(2)} km</Td>
-                    <Td>{secondsToHMS(seg.elapsed_time)}</Td>
+                    <Td className="font-semibold text-text-primary max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">
+                      {/* The distinguishing half of a segment name is usually
+                          the end of it, so keep it reachable on hover. */}
+                      <span title={seg.name}>{seg.name}</span>
+                    </Td>
+                    <Td className="data-value">{formatDistance(metersToKm(seg.distance), 2)} km</Td>
+                    <Td className="data-value">{formatClock(seg.elapsed_time)}</Td>
                     {details.segment_efforts.some((s) => s.average_heartrate) && (
-                      <Td>{seg.average_heartrate ? `${Math.round(seg.average_heartrate)} bpm` : '-'}</Td>
+                      <Td className="data-value">{seg.average_heartrate ? `${formatNumber(seg.average_heartrate)} bpm` : '–'}</Td>
                     )}
                     {details.segment_efforts.some((s) => s.average_watts) && (
-                      <Td>{seg.average_watts ? `${Math.round(seg.average_watts)} W` : '-'}</Td>
+                      <Td className="data-value">{seg.average_watts ? `${formatNumber(seg.average_watts)} W` : '–'}</Td>
                     )}
                     <Td>
                       <AchievementBadges achievements={seg.achievements} />
@@ -631,18 +733,34 @@ function ActivityDetailPage() {
   )
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({
+  label,
+  value,
+  headline = false,
+}: {
+  label: React.ReactNode
+  value: string
+  headline?: boolean
+}) {
   return (
-    <div className="bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle p-4">
-      <p className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold mb-1">{label}</p>
-      <p className="text-lg font-bold text-text-primary">{value}</p>
+    <div
+      className={`rounded-[var(--radius-lg)] border p-4 ${
+        headline
+          ? 'bg-linear-to-br from-accent/[0.08] to-bg-secondary border-accent/25'
+          : 'bg-bg-secondary border-border-subtle'
+      }`}
+    >
+      <p className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold mb-1">{label}</p>
+      <p className={`data-value font-medium text-text-primary ${headline ? 'text-[1.75rem] leading-tight' : 'text-lg'}`}>
+        {value}
+      </p>
     </div>
   )
 }
 
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th className="text-left p-4 px-5 bg-bg-tertiary text-text-muted font-semibold uppercase text-[0.7rem] tracking-wider first:rounded-tl-[var(--radius-lg)] last:rounded-tr-[var(--radius-lg)] max-md:px-2 max-md:py-2.5">
+    <th className="text-left p-4 px-5 bg-bg-tertiary text-text-muted font-semibold uppercase text-[0.75rem] tracking-wider first:rounded-tl-[var(--radius-lg)] last:rounded-tr-[var(--radius-lg)] max-md:px-2 max-md:py-2.5">
       {children}
     </th>
   )
@@ -671,7 +789,7 @@ function AchievementBadges({ achievements }: { achievements?: Array<{ type_id: n
         const style = achievementColors[a.rank]
         if (!style) {
           return (
-            <span key={i} className="py-1 px-2 rounded-[var(--radius-sm)] text-[0.65rem] font-semibold bg-bg-tertiary text-text-secondary">
+            <span key={i} className="py-1 px-2 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold bg-bg-tertiary text-text-secondary">
               PR
             </span>
           )
