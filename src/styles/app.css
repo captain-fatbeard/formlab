@@ -150,6 +150,21 @@
     padding: 0;
   }
 
+  /* Everything the browser draws itself — select popups, date pickers,
+     scrollbars, autofill — follows the app's ground instead of the OS
+     default, which is what made the top-bar filter menus open white. */
+  :root {
+    color-scheme: dark;
+  }
+
+  /* Chrome and Firefox take an open select's list colours from the control, so
+     a transparent control gets a white list. State them explicitly. */
+  select option,
+  select optgroup {
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+  }
+
   body {
     font-family: var(--font-display);
     background-color: var(--color-bg-primary);
