@@ -4,6 +4,7 @@ import { StatsCards } from '~/components/StatsCards'
 import { ActivityCalendar } from '~/components/ActivityCalendar'
 import { PersonalRecords } from '~/components/PersonalRecords'
 import { PageHeader } from '~/components/PageHeader'
+import { WeekChanges } from '~/components/WeekChanges'
 import { sectionHeading } from '~/lib/styles'
 
 export const Route = createFileRoute('/_dashboard/overview')({
@@ -24,6 +25,9 @@ function OverviewPage() {
         scope="lifetime"
         count={lifetimeStats.totalActivities}
       />
+
+      {/* What moved, before what has ever happened. */}
+      <WeekChanges />
 
       <section>
         <h2 className={`${sectionHeading} mb-5`}>All-time totals</h2>

@@ -225,6 +225,18 @@ function ActivityDetailPage() {
               {refreshing ? 'Refreshing...' : 'Refresh'}
             </button>
             )}
+            <Link
+              to="/activities/compare"
+              search={{ a: summary.id, b: undefined }}
+              className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold text-text-muted no-underline hover:text-text-primary hover:bg-bg-tertiary transition-colors"
+              title="Compare this activity with another"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M7 16H3m0 0 3-3m-3 3 3 3" />
+                <path d="M17 8h4m0 0-3-3m3 3-3 3" />
+              </svg>
+              Compare
+            </Link>
             {details?.workout_type != null && details.workout_type > 0 && (
               <span className="inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold uppercase tracking-wide bg-warning-muted text-warning">
                 {workoutTypeLabel(summary.type, details.workout_type)}
