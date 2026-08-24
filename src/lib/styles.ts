@@ -1,5 +1,33 @@
 /** Shared CSS class constants used across multiple components */
 
+/* ── Heading scale ────────────────────────────────────────────────────────
+ * Three levels, used consistently: a page has one title, a page has sections,
+ * a section holds cards. Before this, a card title inside a card was heavier
+ * than the section heading above it, and Records and Performance each had a
+ * gradient variant of their own. */
+
+/** Page title — one per page, rendered by `PageHeader`. */
+export const pageTitle =
+  'text-[2rem] font-semibold tracking-tight text-text-primary leading-tight max-md:text-2xl'
+
+/** Section heading — groups cards within a page. */
+export const sectionHeading = 'text-xl font-semibold text-text-primary max-[480px]:text-lg'
+
+/** Card title — the heading inside a single card. */
+export const cardTitle = 'text-base font-semibold text-text-primary'
+
+/* ── Buttons ──────────────────────────────────────────────────────────────
+ * White on the teal accent measures 2.5:1. Dark on the same teal measures
+ * 7.9:1 and looks better, so that is the primary button everywhere. */
+
+/** Primary action — dark text on accent. */
+export const buttonPrimary =
+  'bg-accent text-bg-primary border border-accent py-2.5 px-5 rounded-[var(--radius-md)] text-sm font-semibold cursor-pointer transition-all duration-200 no-underline inline-flex items-center justify-center gap-2 hover:bg-accent-light hover:border-accent-light disabled:opacity-50 disabled:cursor-not-allowed'
+
+/** Secondary action — quiet, on the card background. */
+export const buttonSecondary =
+  'bg-bg-tertiary border border-border text-text-secondary py-2.5 px-5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-all duration-200 no-underline inline-flex items-center justify-center gap-2 hover:bg-bg-elevated hover:text-text-primary hover:border-text-muted disabled:opacity-50 disabled:cursor-not-allowed'
+
 /** Standard stat card container */
 export const statCard =
   'bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-6 flex flex-col gap-2 transition-all duration-200 card-accent-top hover:border-border hover:-translate-y-0.5 hover:shadow-md max-md:p-4 max-[480px]:p-3.5'
