@@ -5,9 +5,13 @@
 - **Published version:** https://claude.ai/code/artifact/e32e8620-a780-4044-a3a2-092dd5c0c399
   (source in `docs/design-review.html` — republish that same file to update in place)
 - **Findings:** 38 across 9 pages
+- **Status:** all findings addressed on `docs/design-review` — see [§10](#10-what-was-done) for the
+  finding-to-commit map. The findings below are left in their original wording, as the record of
+  what the app looked like at `v1.27.1`.
 
-> **Picking this up in a new session:** the findings are numbered `F01`–`F38` and are stable.
-> Reference them in commits and issues. `pnpm dev` + the passphrase reproduces everything below.
+> **Picking this up in a new session:** the findings are numbered `F01`–`F37` and are stable.
+> Reference them in commits and issues. `pnpm dev` + the passphrase reproduces the *original*
+> behaviour at `v1.27.1`; on this branch the fixes are in place.
 > Screenshots were not committed (`.playwright-mcp` is gitignored) — re-capture as needed.
 
 ---
@@ -23,6 +27,7 @@
 7. [Interaction and accessibility](#7-interaction-and-accessibility) — F28–F37
 8. [Worth adding](#8-worth-adding)
 9. [What I checked, and what I didn't](#9-what-i-checked-and-what-i-didnt)
+10. [What was done](#10-what-was-done)
 
 ---
 
@@ -366,3 +371,63 @@ Not fixes — things the data already supports that the interface doesn't yet of
 **Not reviewed:** Bike Fit, by request. One thing worth carrying into that session — `/bike-position.mov` 404s (it's gitignored as a local-only file) and the page reports no error, showing "Pose model ready" over an empty player. It also loads MediaPipe WASM from `cdn.jsdelivr.net` at runtime.
 
 **Not covered:** performance and bundle size, the sync pipeline's behaviour under failure, and anything about the Supabase schema.
+
+---
+
+## 10. What was done
+
+Every finding above is implemented on `docs/design-review`, in five commits. Nothing was deferred;
+Bike Fit stayed out of scope by request, apart from a page title.
+
+| Commit | Findings |
+|---|---|
+| `feat(ui): one number format, real page headings, filters in the top bar` | F01, F02, F03, F08, F09, F11, F12, F13, F22, F23, F28, F29, F33, F34 |
+| `feat(charts): scope every chart, and stop drawing lines through absent data` | F06, F07, F10, F14, F15, F16, F17, F25, F30 |
+| `feat(activities): make the table survive a phone and the splits survive a century` | F04, F18, F19, F20, F26, F27, F31, F32, F35 |
+| `feat(records,plan): drop the impossible 5K, calm the caps, raise the type floor` | F05, F21, F24, F36, F37 |
+| `feat(overview): add a "this week" strip and a two-activity comparison` | §8 additions |
+
+### The pieces that are now shared
+
+Most of the findings were symptoms of something missing rather than individual mistakes, so the
+fixes mostly took the form of one new module used everywhere:
+
+- **`src/lib/format.ts`** — one locale (`en-GB`) and one implementation of every number, distance,
+  duration, pace, speed and date in the app. `chart-theme` re-exports its date formatters, so a
+  chart axis cannot disagree with the table beside it. Tested.
+- **`src/lib/labels.ts` + `components/GlobalFilters.tsx`** — the top-bar filter pills, and the
+  labels the page scope lines read from, so the two can't drift.
+- **`components/PageHeader.tsx`** — page title, description and scope line, on every page.
+- **`src/lib/glossary.ts` + `/glossary` + `components/MetricTerm.tsx`** — the definitions that used
+  to live in 10px explainer blocks, attached to the terms themselves.
+- **`src/lib/use-local-range.ts` + `RangeSelector`** — a card's range defaults to the global one and
+  marks itself when overridden.
+- **`src/lib/use-modal-panel.ts`** — Escape, focus-in and focus-restore for every drawer and modal,
+  paired with `inert` while closed.
+- **`components/ZoneDistribution.tsx`** — the shared stacked-bar-plus-table that replaced both
+  donuts.
+- **`components/InsufficientData.tsx`** — the state between empty and useful, with `MIN_TREND_POINTS`.
+- **`src/lib/splits.ts`, `src/lib/best-efforts.ts`, `src/lib/segment-names.ts`,
+  `src/lib/week-changes.ts`** — the arithmetic behind F18, F05, F36 and the Overview strip. All tested.
+
+### Judgement calls worth knowing about
+
+- **F02** was resolved towards English, not Danish: `lang="en"` stays and the `da` date locale is
+  gone, including on Plan.
+- **F05** is fixed by filtering physically impossible efforts before taking each bucket's minimum,
+  rather than by tracing the bad row to its source — the data may still contain it, but it can no
+  longer win a bucket. Mile distances are hidden behind a toggle rather than deleted.
+- **F14** drops the donuts entirely rather than reordering their legends.
+- **F15** became a one-series-at-a-time chart with a series toggle, rather than two series on two
+  axes.
+- **F24**'s floor is `0.75rem`; Bike Fit was left alone.
+- **F09**'s scope line distinguishes pages that follow the global filters from pages that
+  deliberately ignore them (Overview, Activities, Records are all-time by design).
+
+### Still open
+
+- Bike Fit, including the silent `/bike-position.mov` 404 and the runtime MediaPipe CDN fetch.
+- The recharts `Formatter` type mismatches that predate this branch — 34 `tsc` errors remain, down
+  from 46, and every one of them is a chart prop's type rather than anything this work introduced.
+- Performance, bundle size, sync-failure behaviour and the Supabase schema — as noted in §9, never
+  in scope.
