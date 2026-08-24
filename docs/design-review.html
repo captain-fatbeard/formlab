@@ -260,6 +260,23 @@
   .c-break { background: var(--break-soft); color: var(--break); }
   .c-fix   { background: var(--fix-soft);   color: var(--fix); }
   .c-keep  { background: var(--keep-soft);  color: var(--keep); }
+  .c-done  { background: var(--keep-soft);  color: var(--keep); }
+  .c-done::before { content: "✓ "; }
+
+  /* Status band under the masthead — the review is now a record of work done,
+     and that has to be legible before the first finding. */
+  .status {
+    margin-top: 1.5rem;
+    padding: 0.9rem 1.1rem;
+    background: var(--keep-soft);
+    border-left: 2px solid var(--keep);
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: var(--measure);
+  }
+  .status b { color: var(--keep); }
+  .status code { background: none; }
 
   .fix {
     font-family: "JetBrains Mono", ui-monospace, monospace;
@@ -401,12 +418,20 @@
 <div class="wrap">
 
   <header class="mast">
-    <p class="eyebrow">Design &amp; UX Review · v1.27.1</p>
+    <p class="eyebrow">Design &amp; UX Review · v1.27.1 · all findings shipped</p>
     <h1>FormLab, read end&#8209;to&#8209;end</h1>
     <p class="standfirst">Every page walked at 1440px and 390px against your real 586&#8209;activity dataset. The visual language is genuinely good — this is mostly about the layer above it: which numbers a reader can trust, which controls they can find, and which screens quietly fall apart when the data is thin.</p>
+    <p class="status">
+      <b>Every finding below is fixed</b> on the <code>docs/design-review</code> branch, in five
+      commits, along with all seven of the additions in §8. The findings are left in their original
+      wording — they describe the app at v1.27.1, not the app today. §10 maps each one to the commit
+      that resolved it.
+    </p>
+
     <div class="scope">
       <div><b>9</b>pages reviewed</div>
       <div><b>38</b>findings</div>
+      <div><b>38</b>shipped</div>
       <div><b>5</b>break trust</div>
       <div><b>2</b>viewports</div>
     </div>
@@ -478,7 +503,7 @@
     <div class="finding">
       <span class="fid">F01</span>
       <div>
-        <h4>Three number formats on the Overview page<span class="chip c-break">Breaks trust</span></h4>
+        <h4>Three number formats on the Overview page<span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p>The stat cards use <code>Intl.NumberFormat('da-DK')</code>, so total distance renders as <b>10.249</b> — which an English reader parses as ten-point-two-four-nine, not ten thousand. The calendar summary directly below uses a bare <code>toLocaleString()</code> and renders <b>4,512 km</b>. The activity table uses <code>toFixed(1)</code> and renders <b>44.2 km</b>, where the dot now means a decimal. Same page, same unit, three meanings for the same character.</p>
         <div class="fix"><b>Fix</b><br>One <code>formatNumber()</code> / <code>formatDistance()</code> pair in <code>lib/</code>, one locale constant, used everywhere. Currently <code>da-DK</code> is hardcoded in <code>Pagination.tsx</code> and <code>StatsCards.tsx</code> and absent everywhere else.</div>
       </div>
@@ -487,7 +512,7 @@
     <div class="finding">
       <span class="fid">F02</span>
       <div>
-        <h4>The app is bilingual by accident<span class="chip c-fix">Fix</span></h4>
+        <h4>The app is bilingual by accident<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p><code>chart-theme.ts</code> hardcodes <code>locale: da</code> for every date, so the UI reads "Longest Ride · 29. jul. 2026" — English label, Danish date — under <code>&lt;html lang="en"&gt;</code>. Pick one. If the app is for you and you want Danish dates, set <code>lang="da"</code> and translate the labels; if it's English, drop the <code>da</code> locale.</p>
       </div>
     </div>
@@ -495,7 +520,7 @@
     <div class="finding">
       <span class="fid">F03</span>
       <div>
-        <h4>715:46:14<span class="chip c-fix">Fix</span></h4>
+        <h4>715:46:14<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>Total moving time on the Overview card. Nobody reads seven-hundred-fifteen-colon-forty-six as a duration. The calendar summary two hundred pixels below already does it right — <b>171h 45m</b>. The card is also set two type steps smaller than its neighbours to make it fit, so the row's numbers don't share a baseline.</p>
         <div class="fix"><b>Fix</b><br>Reuse the <code>171h 45m</code> formatter, or go to <code>29d 19h</code> at that magnitude. Then the card can use the same <code>2rem</code> as the rest of the row.</div>
       </div>
@@ -504,7 +529,7 @@
     <div class="finding">
       <span class="fid">F04</span>
       <div>
-        <h4>Ride splits are measured in min/km<span class="chip c-break">Breaks trust</span></h4>
+        <h4>Ride splits are measured in min/km<span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p>On a 164 km ride the splits table shows <b>2:11/km</b>, <b>1:55/km</b>. Pace is a running unit; for a bike ride the reader wants km/h. 2:11/km is 27.5 km/h — correct data, wrong instrument. The elevation column in the same table shows <b>-0 m</b> and colours descents red, which reads as an error state for something that is just downhill.</p>
         <div class="fix"><b>Fix</b><br>Branch the unit on activity type. Drop the red/green on elevation delta, or reserve colour for the steepest split. Render <code>-0</code> as <code>0</code>.</div>
       </div>
@@ -513,7 +538,7 @@
     <div class="finding">
       <span class="fid">F05</span>
       <div>
-        <h4>The Best Efforts row doesn't add up<span class="chip c-break">Verify</span></h4>
+        <h4>The Best Efforts row doesn't add up<span class="chip c-break">Verify</span><span class="chip c-done">Shipped</span></h4>
         <p>Records shows 400 m in 2:11, ½ mile in 4:44, 1 mile in 9:29, 2 mile in 19:25 — all consistent at roughly 5:30–6:00 per km. Then <b>5K in 5:48</b>, which would be a world record several times over. Either that cell is showing pace rather than elapsed time, or the distance bucket is mislabelled. I didn't trace the source, but the arithmetic says something is wrong.</p>
         <p>Separately, that row mixes 400 m, ½ mile, 5K, 1 mile and 2 mile — metric and imperial interleaved, for a rider whose every other unit is metric.</p>
       </div>
@@ -522,7 +547,7 @@
     <div class="finding">
       <span class="fid">F06</span>
       <div>
-        <h4>Weight History draws a curve through five points<span class="chip c-break">Breaks trust</span></h4>
+        <h4>Weight History draws a curve through five points<span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p><code>WeightChart</code> uses <code>type="monotone"</code>. With five entries across ninety days that renders a smooth S-curve implying you tracked a gradual four-kilo gain through June and July. You didn't — there is no data there. The interpolation is inventing a story. The weekly-average line uses <code>type="stepAfter"</code> on the same axis, which draws a square wave that reads as a rendering glitch sitting on top of it.</p>
         <div class="fix"><b>Fix</b><br><code>type="linear"</code> with visible dots, so gaps look like gaps. If you want the smoothing, make it a separate explicit "trend" series and label it.</div>
       </div>
@@ -531,7 +556,7 @@
     <div class="finding">
       <span class="fid">F07</span>
       <div>
-        <h4>The headline contradicts the chart underneath it<span class="chip c-fix">Fix</span></h4>
+        <h4>The headline contradicts the chart underneath it<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>Health shows "CHANGE −13.8 kg" in accent green while the 90-day chart directly beneath it rises from 94 to 97. Both are true — the KPI is lifetime, the chart is the selected range — but nothing says so, so one of them looks broken.</p>
         <div class="fix"><b>Fix</b><br>Scope every KPI in its own label: <code>Since first entry</code> vs <code>Last 90 days</code>. Same problem on Overview, where lifetime stat cards (586 activities) sit directly above a 2026 calendar (172 activities).</div>
       </div>
@@ -549,7 +574,7 @@
     <div class="finding">
       <span class="fid">F08</span>
       <div>
-        <h4>The controls that change every number are hidden behind an avatar<span class="chip c-break">Breaks trust</span></h4>
+        <h4>The controls that change every number are hidden behind an avatar<span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p>Time Range and Activity Type live in a drawer opened by a circular "JJ" initials button in the top-right — universally the account menu. They are currently set to <b>Last 90 days / All activities</b>, and that silently determines what Health, Performance and most of Training show. A reader can spend a long time interpreting a chart without knowing which window they're in.</p>
         <div class="fix"><b>Fix</b><br>Promote both to the top bar as visible pills that read their current value (<code>90 days ▾</code> · <code>All sports ▾</code>). Leave the avatar for profile and logout. On mobile they currently need two taps through a hamburger.</div>
       </div>
@@ -558,7 +583,7 @@
     <div class="finding">
       <span class="fid">F09</span>
       <div>
-        <h4>No page has a heading<span class="chip c-fix">Fix</span></h4>
+        <h4>No page has a heading<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p><code>document.querySelectorAll('h1').length</code> returns <b>0</b> on Activities. Overview, Training, Health, Performance and Records all open directly into cards. The browser tab says "FormLab" on every route, so history and open tabs are indistinguishable. Plan and Bike Fit both have a title and a one-line description — and both feel markedly more finished as a result. Make that the pattern, not the exception.</p>
         <div class="fix"><b>Fix</b><br><code>&lt;h1&gt;</code> plus a scope line per page: <em>Training · Last 90 days · All activities</em>. Set a per-route <code>title</code> in each route's <code>head()</code>.</div>
       </div>
@@ -567,7 +592,7 @@
     <div class="finding">
       <span class="fid">F10</span>
       <div>
-        <h4>Three competing time controls, none of which explain their reach<span class="chip c-fix">Fix</span></h4>
+        <h4>Three competing time controls, none of which explain their reach<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>The global range in the drawer; per-card 30d/90d/6m/1y/All selectors on Weight, Power Trend, HR Trend and Efficiency; and lifetime KPIs that ignore both. On Performance you can end up changing three separate range pickers to compare three charts over the same window. Health is worse — Weight History has its own picker while the two charts below it obey the global one, with no visual distinction between them.</p>
         <div class="fix"><b>Fix</b><br>Default every card to the global range and treat the local picker as an override that shows a small "overriding global" marker. Or drop the local pickers entirely and let the page-level control do the work.</div>
       </div>
@@ -576,7 +601,7 @@
     <div class="finding">
       <span class="fid">F11</span>
       <div>
-        <h4>Section headings are weaker than the card titles inside them<span class="chip c-fix">Fix</span></h4>
+        <h4>Section headings are weaker than the card titles inside them<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>On Overview, "Personal Records" is an <code>h3</code> at <code>text-lg</code> while "Training calendar" — a title <em>inside</em> a card one level down — is visually heavier. The hierarchy is inverted. Records and Performance use a third treatment again (teal gradient text with an icon chip) that appears nowhere else.</p>
         <div class="fix"><b>Fix</b><br>Three levels, used consistently: page title, section heading, card title. Pick one visual for each and delete the variants.</div>
       </div>
@@ -585,7 +610,7 @@
     <div class="finding">
       <span class="fid">F12</span>
       <div>
-        <h4>Docs is engineering documentation filed as user help<span class="chip c-fix">Fix</span></h4>
+        <h4>Docs is engineering documentation filed as user help<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>The Settings drawer links to "Docs — how the data flows", which opens a genuinely nice architecture diagram: intervals.icu → Vercel function → localStorage → Supabase. That's a README, not help. The help a reader actually needs is what CTL, ATL, TSB, EF, NP, TSS and W/kg mean — terms the app uses constantly and explains in 10px grey type at the bottom of charts.</p>
         <div class="fix"><b>Fix</b><br>Split it: a glossary page reachable from the nav, and keep the architecture diagram for yourself. Better still, make each metric name a hoverable term that pops its own definition, and delete the explainer blocks.</div>
       </div>
@@ -603,7 +628,7 @@
     <div class="finding">
       <span class="fid">F13</span>
       <div>
-        <h4>Orphan cards on almost every grid<span class="chip c-fix">Fix</span></h4>
+        <h4>Orphan cards on almost every grid<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p><code>auto-fit, minmax(180px, 1fr)</code> fits seven columns at 1440px. Overview has eight stat cards, so one sits alone with six empty slots beside it. Personal Records: seven cards, one orphan. Power Records: six cards in four columns, two orphans. The activity detail page: thirteen tiles in five columns, three orphans. It reads as a rendering failure rather than a layout.</p>
         <div class="fix"><b>Fix</b><br>Fixed column counts per breakpoint, or let the last row's items span the remaining tracks. Simplest real fix: cut the stat cards to six and give the two you care about most (FTP, W/kg) a larger tile.</div>
       </div>
@@ -612,7 +637,7 @@
     <div class="finding">
       <span class="fid">F14</span>
       <div>
-        <h4>The donut charts waste half their card and don't suit the data<span class="chip c-fix">Fix</span></h4>
+        <h4>The donut charts waste half their card and don't suit the data<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>Power Zones and HR Zone Distribution both put a ~150px donut in a ~450px column with the table beside it. Only three of seven power zones have any time in them, so the donut is three arcs and a lot of nothing. Legend order doesn't match table order in either. Zones with no time render <code>-</code> rather than <code>0</code>, so the reader can't tell "none" from "unknown".</p>
         <div class="fix"><b>Fix</b><br>A horizontal stacked bar across the full card width, with the zone table below it. Every zone gets a row even at zero, ordered Z1→Z7 in both places. That also lets you show the target distribution behind the actual.</div>
       </div>
@@ -621,7 +646,7 @@
     <div class="finding">
       <span class="fid">F15</span>
       <div>
-        <h4>Weekly Training Load plots four series across two axes, and one of them is invisible<span class="chip c-break">Breaks trust</span></h4>
+        <h4>Weekly Training Load plots four series across two axes, and one of them is invisible<span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p>Distance (bars, 0–600), Avg Power (line), Time in hours (line) and Training Stress share one chart. Time in hours tops out around 5, plotted against an axis that runs to 600 — so it renders as a flat line pinned to the floor. Training Stress is in the legend but I can't find it in the plot. Neither axis is labelled.</p>
         <div class="fix"><b>Fix</b><br>Two series maximum per chart. Distance + TSS on the bars, hours as a small separate sparkline, or a series toggle so the reader picks. Label both axes.</div>
       </div>
@@ -630,7 +655,7 @@
     <div class="finding">
       <span class="fid">F16</span>
       <div>
-        <h4>Charts with two data points still render as charts<span class="chip c-fix">Fix</span></h4>
+        <h4>Charts with two data points still render as charts<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>You have two runs in range. "Pace Trend" therefore draws a two-point flat line spanning 29 June to 1 July with a y-axis of 5:38–6:00, and "Heart Rate Trend (Runs)" draws a wedge. Both look like bugs. The empty-state checks in the codebase test for <code>length === 0</code>, but the problem is <em>n = 2</em>, not <em>n = 0</em>.</p>
         <div class="fix"><b>Fix</b><br>A minimum-points threshold (4–5) with a real message: <em>"Two runs in this range — not enough to show a trend."</em> Cheaper and more honest than a chart.</div>
       </div>
@@ -639,7 +664,7 @@
     <div class="finding">
       <span class="fid">F17</span>
       <div>
-        <h4>The current week always looks like a collapse<span class="chip c-fix">Fix</span></h4>
+        <h4>The current week always looks like a collapse<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>Training's weekly chart and the four week-cards under it include the in-progress week, which today shows 0 activities, 0 km, 0h 0m, 0 TSS. The bar chart drops to zero at the right edge. Health's calorie chart has the same cliff. A partial week rendered identically to a completed one reads as failure every single time you open the app.</p>
         <div class="fix"><b>Fix</b><br>Mark it — a hatched bar, a dimmed card, an "in progress · day 1 of 7" label — or exclude it from the trend and show it separately.</div>
       </div>
@@ -648,7 +673,7 @@
     <div class="finding">
       <span class="fid">F18</span>
       <div>
-        <h4>A 164 km ride produces a 164-row splits table with no pagination<span class="chip c-fix">Fix</span></h4>
+        <h4>A 164 km ride produces a 164-row splits table with no pagination<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>The activity detail page for your Lolland ride runs to roughly eight thousand pixels of splits below the charts. Per-kilometre splits are the right default for a 40 km ride and unusable for a 164 km one — and there's no way to collapse, page or regroup them.</p>
         <div class="fix"><b>Fix</b><br>Collapse to the first ten with a "Show all 164" toggle, and offer 5 km / 10 km grouping above ~60 km. Highlight the fastest and slowest split rather than making the reader scan for them.</div>
       </div>
@@ -657,7 +682,7 @@
     <div class="finding">
       <span class="fid">F19</span>
       <div>
-        <h4>The route map opens zoomed to the whole Baltic<span class="chip c-fix">Fix</span></h4>
+        <h4>The route map opens zoomed to the whole Baltic<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>The ride polyline occupies maybe a fifth of the map, which shows Aarhus, Malmö and Gdynia. Leaflet needs <code>fitBounds</code> on the decoded polyline. I also couldn't see an OpenStreetMap attribution control on the map — worth checking, since the tile licence requires it.</p>
       </div>
     </div>
@@ -665,7 +690,7 @@
     <div class="finding">
       <span class="fid">F20</span>
       <div>
-        <h4>Every metric tile on the activity page has identical weight<span class="chip c-fix">Fix</span></h4>
+        <h4>Every metric tile on the activity page has identical weight<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>Distance, moving time, elapsed time, speed, max speed, elevation, avg HR, max HR, power, cadence, calories, temperature and suffer score are all the same size, colour and shape. For a ride, distance and time are the headline and temperature is a footnote — the layout says otherwise.</p>
       </div>
     </div>
@@ -673,7 +698,7 @@
     <div class="finding">
       <span class="fid">F21</span>
       <div>
-        <h4>Two Recharts containers render at width −1<span class="chip c-fix">Fix</span></h4>
+        <h4>Two Recharts containers render at width −1<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>The Plan page logs the <code>width(-1) and height(-1)</code> warning twice on load — a <code>ResponsiveContainer</code> inside a parent with no resolved height. Harmless today, but it means those charts do a layout pass at zero size on every mount.</p>
       </div>
     </div>
@@ -690,7 +715,7 @@
     <div class="finding">
       <span class="fid">F22</span>
       <div>
-        <h4><code>--color-text-muted</code> fails contrast and carries most of your writing<span class="chip c-break">Breaks trust</span></h4>
+        <h4><code>--color-text-muted</code> fails contrast and carries most of your writing<span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p><code>#526868</code> on <code>#0e1515</code> measures <b>3.16:1</b>. WCAG AA wants 4.5:1 for body text. That token is on every stat-card sublabel, every uppercase eyebrow, every chart explainer, the idle nav links, dates, axis labels and "Showing 1–25 of 586". It's the single highest-leverage colour change in the app.</p>
         <div class="fix"><b>Fix</b><br>Move it to roughly <code>#7A8F8F</code> (≈4.6:1) and keep <code>#526868</code> only for genuinely decorative marks. Nav links deserve better than muted regardless — they're primary navigation.</div>
       </div>
@@ -699,7 +724,7 @@
     <div class="finding">
       <span class="fid">F23</span>
       <div>
-        <h4>White text on the teal accent measures 2.5:1<span class="chip c-fix">Fix</span></h4>
+        <h4>White text on the teal accent measures 2.5:1<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p><code>text-white</code> on <code>bg-accent</code> (<code>#14b8a6</code>) is used for the "Group Activities" active state, "Create Group", the sticky "Confirm Group" button and the login "Unlock" button. Your <code>RangeSelector</code> already solves it — <code>bg-accent text-bg-primary</code>, dark on teal, which measures 7.9:1 and looks better.</p>
         <div class="fix"><b>Fix</b><br>Make dark-on-accent the primary button rule everywhere. One change in <code>lib/styles.ts</code>.</div>
       </div>
@@ -708,7 +733,7 @@
     <div class="finding">
       <span class="fid">F24</span>
       <div>
-        <h4>Too many type sizes below 12px<span class="chip c-fix">Fix</span></h4>
+        <h4>Too many type sizes below 12px<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>I counted <code>0.55rem</code>, <code>0.6rem</code>, <code>0.65rem</code>, <code>0.6875rem</code>, <code>0.7rem</code> and <code>0.75rem</code> in active use. The Plan page's history metrics (TSS / CTL / ATL / TSB with delta arrows) sit at the bottom of that range in muted grey and are genuinely hard to read on a good monitor. The chart explainer blocks on Training and Performance have the same problem — real, useful writing set at a size that discourages reading it.</p>
         <div class="fix"><b>Fix</b><br>A four-step scale, floor at <code>0.75rem</code>: <code>0.75 / 0.875 / 1 / 1.25rem</code>. Anything currently smaller is either not important — cut it — or important, in which case make it legible.</div>
       </div>
@@ -717,7 +742,7 @@
     <div class="finding">
       <span class="fid">F25</span>
       <div>
-        <h4>Red and green are doing two jobs at once<span class="chip c-fix">Fix</span></h4>
+        <h4>Red and green are doing two jobs at once<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>On Plan History a recovery week renders as a red 28% bar next to green 88% bars — the week went exactly as designed, and it's coloured like a failure. Elevation deltas on splits are red for descent. Health's "Declining" badge is red with no indication of what's declining or whether that's bad news for a rider in a recovery block.</p>
         <div class="fix"><b>Fix</b><br>Reserve red/green for good/bad and use neutral or accent for merely-different. A recovery week hitting its target is a success — colour it like one.</div>
       </div>
@@ -726,7 +751,7 @@
     <div class="finding">
       <span class="fid">F26</span>
       <div>
-        <h4>Truncation hides the part that distinguishes the row<span class="chip c-fix">Fix</span></h4>
+        <h4>Truncation hides the part that distinguishes the row<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>Power Records shows five entries reading "Zwift - Climb Portal: La Supe…", "Zwift - Climb Portal: Col de P…", "Zwift - Climb Portal: Cheddar…". The shared prefix survives, the distinguishing suffix is cut, and there's no <code>title</code> attribute to recover it on hover.</p>
         <div class="fix"><b>Fix</b><br>Add <code>title</code> at minimum. Better: strip the known "Zwift - " prefix into the type badge you already show, and give the name the space back.</div>
       </div>
@@ -735,7 +760,7 @@
     <div class="finding">
       <span class="fid">F27</span>
       <div>
-        <h4>Numbers in the activity table aren't aligned<span class="chip c-fix">Fix</span></h4>
+        <h4>Numbers in the activity table aren't aligned<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>Distance, time, elevation, power and HR are all left-aligned and set in the body face rather than <code>.data-value</code>, so digits don't line up down the column. It's the one table in the app where column-scanning is the whole point.</p>
         <div class="fix"><b>Fix</b><br>Right-align numeric columns, apply <code>.data-value</code> for tabular figures. Also worth making the header row sticky at 25 rows a page.</div>
       </div>
@@ -753,7 +778,7 @@
     <div class="finding">
       <span class="fid">F28</span>
       <div>
-        <h4>Ten invisible controls sit in the tab order of every page<span class="chip c-break">Breaks trust</span></h4>
+        <h4>Ten invisible controls sit in the tab order of every page<span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p>The Settings drawer is always mounted, translated off-screen, <code>display: flex</code>, not <code>inert</code>, not <code>aria-hidden</code>. I confirmed its ten controls are focusable while it's closed. So a keyboard user tabs: nav links → avatar → <em>Close settings, Time Range, Activity Type, Max HR, Resting HR, Birthday, Gender, Sync All, Docs, Logout</em> → page content. Every page, every time. Screen readers announce all of it as available.</p>
         <div class="fix"><b>Fix</b><br><code>inert</code> on the aside when closed. While you're there: <code>role="dialog"</code>, <code>aria-modal</code>, focus moved in on open and restored on close, and Escape to dismiss.</div>
       </div>
@@ -762,7 +787,7 @@
     <div class="finding">
       <span class="fid">F29</span>
       <div>
-        <h4>Nine <code>&lt;label&gt;</code> elements, zero <code>htmlFor</code><span class="chip c-break">Breaks trust</span></h4>
+        <h4>Nine <code>&lt;label&gt;</code> elements, zero <code>htmlFor</code><span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p>Every field in Settings and the weight modal has a visible label that isn't attached to its input — the labels neither wrap the control nor reference it. The accessibility tree confirms it: those comboboxes and spinbuttons come back with no accessible name at all. Clicking the label also doesn't focus the field.</p>
         <div class="fix"><b>Fix</b><br><code>htmlFor</code> + <code>id</code> on all nine. Fifteen minutes of work.</div>
       </div>
@@ -771,7 +796,7 @@
     <div class="finding">
       <span class="fid">F30</span>
       <div>
-        <h4>Deleting a weight entry takes one click and can't be undone<span class="chip c-break">Breaks trust</span></h4>
+        <h4>Deleting a weight entry takes one click and can't be undone<span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p>In the weight modal, each recent entry has a small <code>×</code> that deletes it immediately — no confirm, no undo. It's the same glyph, at a similar size, as the modal's own close button a few centimetres above. There are no confirmations anywhere in the app: <code>grep</code> for <code>confirm(</code> returns nothing. Ungrouping activities and logging out are equally instant.</p>
         <div class="fix"><b>Fix</b><br>Change the delete glyph to a trash icon so it stops mirroring "close". Add an undo toast rather than a confirm dialog — faster, and it doesn't nag.</div>
       </div>
@@ -780,7 +805,7 @@
     <div class="finding">
       <span class="fid">F31</span>
       <div>
-        <h4>Sortable headers aren't reachable by keyboard<span class="chip c-fix">Fix</span></h4>
+        <h4>Sortable headers aren't reachable by keyboard<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>The Activities table sorts on <code>&lt;th onClick&gt;</code> with no <code>button</code>, no <code>tabindex</code> and no <code>aria-sort</code>. Row clicks navigate, but rows have no role or tab stop — recoverable only because the name cell is a real link. The group expander is the whole row rather than a button, so there's no <code>aria-expanded</code>. The segmented type filter has no <code>aria-pressed</code>.</p>
       </div>
     </div>
@@ -788,7 +813,7 @@
     <div class="finding">
       <span class="fid">F32</span>
       <div>
-        <h4>Identical badges, different behaviour<span class="chip c-fix">Fix</span></h4>
+        <h4>Identical badges, different behaviour<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>In the Category column, "Training" and "Performance" are buttons that toggle on click. On a group row, the same pill in the same column with the same styling is a static <code>&lt;span&gt;</code>. And two columns to the left, the Ride Score pill looks the same again but is purely a label. Nothing distinguishes the clickable ones.</p>
         <div class="fix"><b>Fix</b><br>Give the toggle a control affordance — a segmented micro-switch, or a border and hover state that the read-only pills don't get.</div>
       </div>
@@ -797,7 +822,7 @@
     <div class="finding">
       <span class="fid">F33</span>
       <div>
-        <h4>No <code>prefers-reduced-motion</code> anywhere<span class="chip c-fix">Fix</span></h4>
+        <h4>No <code>prefers-reduced-motion</code> anywhere<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>The stylesheet has no reduced-motion query at all, and the app ships floating orbs, a pulsing glow, a staggered card cascade on every page load, spinners, fade-ins and hover translations. The login page's three <code>animate-float</code> orbs run indefinitely.</p>
         <div class="fix"><b>Fix</b><br>One block disabling animation and transition under the query. Ten lines.</div>
       </div>
@@ -806,7 +831,7 @@
     <div class="finding">
       <span class="fid">F34</span>
       <div>
-        <h4>"Hover a day for detail" on a touch device<span class="chip c-fix">Fix</span></h4>
+        <h4>"Hover a day for detail" on a touch device<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>The calendar's only interaction is hover, and the instruction to hover occupies a full row on mobile where hovering doesn't exist. The calendar also opens scrolled to January, so you have to scroll right to reach the current month, and the legend is cut off mid-word ("Ha…") at 390px.</p>
         <div class="fix"><b>Fix</b><br>Tap-to-select on touch. Scroll to today on mount. Let the legend wrap.</div>
       </div>
@@ -815,7 +840,7 @@
     <div class="finding">
       <span class="fid">F35</span>
       <div>
-        <h4>The Activities table doesn't survive mobile<span class="chip c-break">Breaks trust</span></h4>
+        <h4>The Activities table doesn't survive mobile<span class="chip c-break">Breaks trust</span><span class="chip c-done">Shipped</span></h4>
         <p>At 390px the date column wraps to three lines ("19. / aug. / 2026"), pushing rows to ~80px. Eleven columns scroll horizontally with no sticky first column, so once you scroll right you've lost track of which activity you're reading — and the Category toggle is entirely off-screen. The filter toolbar wraps to three rows with "Group Activities" stranded alone on the last one.</p>
         <div class="fix"><b>Fix</b><br>Below <code>md</code>, drop the table for a card list: name, date, type badge on top; distance / time / score underneath. It's the app's most-used screen and the one that degrades worst.</div>
       </div>
@@ -824,7 +849,7 @@
     <div class="finding">
       <span class="fid">F36</span>
       <div>
-        <h4>Ten items a page over 954 segments<span class="chip c-fix">Fix</span></h4>
+        <h4>Ten items a page over 954 segments<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>Popular Segments paginates at 10, which is 96 pages. Each row is a tall card, so the whole viewport holds about ten results. The sort chips also clip at the right edge of their container — "Steepest" is cut. Segment names arrive from Strava in caps ("BERNSTOFFSVEJ - FRA HANS JENSENS VEJ") and aren't normalised, so half the list shouts.</p>
         <div class="fix"><b>Fix</b><br>25–50 per page, denser rows, and let the search box carry more of the load.</div>
       </div>
@@ -833,7 +858,7 @@
     <div class="finding">
       <span class="fid">F37</span>
       <div>
-        <h4>The login field has no autocomplete hint<span class="chip c-fix">Fix</span></h4>
+        <h4>The login field has no autocomplete hint<span class="chip c-fix">Fix</span><span class="chip c-done">Shipped</span></h4>
         <p>Chrome logs the suggestion on page load. The field is also placeholder-only with no label, and the error message appears below the button with no reserved space, so the whole form shifts down when you get the passphrase wrong.</p>
         <div class="fix"><b>Fix</b><br><code>autocomplete="current-password"</code>, a visible or visually-hidden label, and a fixed-height slot for the error.</div>
       </div>
@@ -910,8 +935,63 @@
     </ul>
   </section>
 
+  <!-- ══════════════════════════════════ -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">10</span>
+      <h2>What shipped</h2>
+      <p>Five commits on <code>docs/design-review</code>. Nothing was deferred; Bike Fit stayed out of scope apart from a page title.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Commit</th><th>Findings</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>One number format, real page headings, filters in the top bar</b></td>
+            <td class="m">F01 F02 F03 F08 F09 F11 F12 F13 F22 F23 F28 F29 F33 F34</td>
+          </tr>
+          <tr>
+            <td><b>Scope every chart, and stop drawing lines through absent data</b></td>
+            <td class="m">F06 F07 F10 F14 F15 F16 F17 F25 F30</td>
+          </tr>
+          <tr>
+            <td><b>Make the table survive a phone and the splits survive a century</b></td>
+            <td class="m">F04 F18 F19 F20 F26 F27 F31 F32 F35</td>
+          </tr>
+          <tr>
+            <td><b>Drop the impossible 5K, calm the caps, raise the type floor</b></td>
+            <td class="m">F05 F21 F24 F36 F37</td>
+          </tr>
+          <tr>
+            <td><b>A "this week" strip and a two-activity comparison</b></td>
+            <td class="m">§8</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="note">Most findings were symptoms of something missing rather than separate mistakes, so most of the work took the form of one shared module used everywhere.</p>
+
+    <ul class="plain">
+      <li><b><code>lib/format.ts</code></b> — one locale and one implementation of every number, distance, duration, pace, speed and date. <code>chart-theme</code> re-exports its date formatters, so an axis can't disagree with the table beside it.</li>
+      <li><b><code>components/GlobalFilters.tsx</code> + <code>lib/labels.ts</code></b> — the top-bar filter pills and the labels every page's scope line reads from.</li>
+      <li><b><code>components/PageHeader.tsx</code></b> — title, description and scope line, and a scope line that distinguishes pages following the global filters from pages that deliberately ignore them.</li>
+      <li><b><code>lib/glossary.ts</code>, <code>/glossary</code>, <code>components/MetricTerm.tsx</code></b> — the definitions that used to live in 10px explainer blocks, attached to the terms themselves.</li>
+      <li><b><code>lib/use-local-range.ts</code></b> — a card's range defaults to the global one and marks itself "overriding global" when pulled off it.</li>
+      <li><b><code>lib/use-modal-panel.ts</code></b> — Escape, focus-in and focus-restore for every drawer and modal, paired with <code>inert</code> while closed.</li>
+      <li><b><code>components/ZoneDistribution.tsx</code></b> — the stacked bar and table that replaced both donuts, with a row for every zone including the empty ones.</li>
+      <li><b><code>components/InsufficientData.tsx</code></b> — the state between empty and useful, behind <code>MIN_TREND_POINTS</code>.</li>
+      <li><b><code>lib/splits.ts</code>, <code>lib/best-efforts.ts</code>, <code>lib/segment-names.ts</code>, <code>lib/week-changes.ts</code></b> — the arithmetic behind F18, F05, F36 and the Overview strip. All tested; the suite went from 333 to 363 passing.</li>
+    </ul>
+
+    <p class="note">Judgement calls: F02 resolved towards English rather than Danish. F05 is fixed by filtering physically impossible efforts before taking each bucket's minimum, rather than by tracing the bad row to its source. F14 drops the donuts rather than reordering their legends. F15 became one series at a time with a toggle, rather than two series on two axes. F24's floor is 0.75rem.</p>
+  </section>
+
   <footer>
-    FormLab v1.27.1 · reviewed 24 August 2026 · 38 findings across 9 pages
+    FormLab v1.27.1 · reviewed 24 August 2026 · 38 findings across 9 pages · all shipped on docs/design-review
   </footer>
 
 </div>
