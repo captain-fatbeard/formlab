@@ -1,8 +1,17 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { type StravaActivity, metersToKm, secondsToHMS } from '~/lib/strava'
+import { type StravaActivity, metersToKm } from '~/lib/strava'
 import { useDashboard, type ActivityGroup } from '~/lib/dashboard-context'
-import { formatDateFull } from '~/lib/chart-theme'
+import {
+  formatDateFull,
+  formatDateShort,
+  formatNumber,
+  formatDistance,
+  formatElevation,
+  formatDuration,
+} from '~/lib/format'
+import { buttonPrimary, buttonSecondary } from '~/lib/styles'
+import { useModalPanel } from '~/lib/use-modal-panel'
 import { calculateActivityScores } from '~/lib/performance'
 import { getScoreLabel, scoreLabelClasses, activityTypeClasses } from '~/lib/activities'
 import { rollup } from '~/lib/rollup'
@@ -20,6 +29,20 @@ type SortDirection = 'asc' | 'desc'
 type TypeFilter = 'all' | 'ride' | 'zwift' | 'run'
 type CategoryFilter = 'all' | 'training' | 'performance'
 type ScoreFilter = 'all' | 'Easy' | 'Moderate' | 'Solid' | 'Hard' | 'Epic'
+
+/** The table's columns, in order. `id: null` means the column can't be sorted. */
+const COLUMNS: Array<{ id: Exclude<SortColumn, null> | null; label: string; numeric?: boolean }> = [
+  { id: 'date', label: 'Date' },
+  { id: null, label: 'Name' },
+  { id: 'type', label: 'Type' },
+  { id: 'distance', label: 'Distance', numeric: true },
+  { id: 'time', label: 'Time', numeric: true },
+  { id: 'elevation', label: 'Elevation', numeric: true },
+  { id: 'power', label: 'Power', numeric: true },
+  { id: 'hr', label: 'HR', numeric: true },
+  { id: 'score', label: 'Ride score' },
+  { id: 'category', label: 'Category' },
+]
 
 const DISTANCE_OPTIONS = [
   { value: 0, label: 'Any distance' },
@@ -87,6 +110,9 @@ export function ActivityList({ activities }: ActivityListProps) {
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [page, setPage] = useState(1)
+
+  const closeGroupModal = useCallback(() => setShowGroupNameModal(false), [])
+  const groupModalRef = useModalPanel<HTMLDivElement>(showGroupNameModal, closeGroupModal)
 
   // Filters
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
@@ -328,15 +354,21 @@ export function ActivityList({ activities }: ActivityListProps) {
     )
   }
 
-  const thClass = "text-left p-4 px-5 bg-bg-tertiary text-text-muted font-semibold uppercase text-[0.7rem] tracking-wider max-md:px-2 max-md:py-2.5"
-  const tdClass = "p-4 px-5 border-b border-border-subtle max-md:px-2 max-md:py-2.5"
+  // Sticky at the height of the top bar, so the column you are reading is still
+  // named 25 rows down.
+  const thClass = "text-left p-4 px-5 bg-bg-tertiary text-text-muted font-semibold uppercase text-[0.75rem] tracking-wider lg:sticky lg:top-14 lg:z-10"
+  const thNumeric = `${thClass} text-right`
+  const tdClass = "p-4 px-5 border-b border-border-subtle"
+  // Numbers are what this table is scanned for, so they are right-aligned and
+  // set in the tabular figures the rest of the app uses.
+  const tdNumeric = `${tdClass} text-right data-value whitespace-nowrap`
   const filterSelectClass = "custom-select bg-bg-tertiary border border-border text-text-secondary py-1.5 pr-8 pl-3 rounded-[var(--radius-sm)] text-[0.75rem] cursor-pointer transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15 shrink-0"
 
   return (
     <>
       {/* Toolbar: search + filters + group toggle */}
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <div className="relative flex-1 min-w-[180px] max-w-[300px]">
+      <div className="flex items-center gap-3 mb-3 flex-wrap max-md:gap-2">
+        <div className="relative flex-1 min-w-[180px] max-w-[300px] max-md:max-w-none max-md:basis-full">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
@@ -362,7 +394,9 @@ export function ActivityList({ activities }: ActivityListProps) {
           ).map(([value, label]) => (
             <button
               key={value}
+              type="button"
               onClick={() => setTypeFilter(value)}
+              aria-pressed={typeFilter === value}
               className={`py-1.5 px-3 text-[0.75rem] font-semibold cursor-pointer transition-all duration-150 not-first:border-l not-first:border-border ${
                 typeFilter === value
                   ? 'bg-accent/15 text-accent'
@@ -437,16 +471,18 @@ export function ActivityList({ activities }: ActivityListProps) {
           </span>
         )}
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-3 max-md:ml-0 max-md:basis-full max-md:justify-between">
           <button
-            className={`py-1.5 px-4 rounded-[var(--radius-sm)] text-[0.8rem] font-semibold cursor-pointer transition-all duration-150 ${
+            type="button"
+            aria-pressed={groupMode}
+            className={`py-1.5 px-4 rounded-[var(--radius-sm)] text-[0.8125rem] font-semibold cursor-pointer transition-all duration-150 ${
               groupMode
-                ? 'bg-accent text-white hover:bg-accent-dark'
+                ? 'bg-accent text-bg-primary hover:bg-accent-light'
                 : 'bg-bg-tertiary border border-border text-text-secondary hover:bg-bg-elevated hover:text-text-primary'
             }`}
             onClick={toggleGroupMode}
           >
-            {groupMode ? 'Grouping On' : 'Group Activities'}
+            {groupMode ? 'Grouping on' : 'Group activities'}
           </button>
           {groupMode && selectedIds.size > 0 && (
             <span className="text-sm text-text-muted animate-fade-in">
@@ -460,12 +496,22 @@ export function ActivityList({ activities }: ActivityListProps) {
       {showGroupNameModal && (
         <>
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={() => setShowGroupNameModal(false)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-bg-secondary border border-border rounded-[var(--radius-lg)] p-6 w-[400px] max-w-[90vw] shadow-xl animate-modal-slide-in">
-            <h3 className="text-lg font-semibold text-text-primary mb-4">Group Activities</h3>
+          <div
+            ref={groupModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="group-modal-title"
+            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-bg-secondary border border-border rounded-[var(--radius-lg)] p-6 w-[400px] max-w-[90vw] shadow-xl animate-modal-slide-in"
+          >
+            <h3 id="group-modal-title" className="text-lg font-semibold text-text-primary mb-4">Group activities</h3>
             <p className="text-sm text-text-muted mb-4">
               Give this group a name. The {selectedIds.size} activities will appear as a single merged entry.
             </p>
+            <label htmlFor="group-name" className="block text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold mb-2">
+              Group name
+            </label>
             <input
+              id="group-name"
               type="text"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
@@ -476,62 +522,109 @@ export function ActivityList({ activities }: ActivityListProps) {
             />
             <div className="flex gap-3 justify-end">
               <button
-                className="py-2 px-4 rounded-[var(--radius-sm)] text-sm font-medium cursor-pointer bg-bg-tertiary border border-border text-text-secondary hover:bg-bg-elevated hover:text-text-primary transition-all duration-150"
+                type="button"
+                className={buttonSecondary}
                 onClick={() => setShowGroupNameModal(false)}
               >
                 Cancel
               </button>
               <button
-                className="py-2 px-4 rounded-[var(--radius-sm)] text-sm font-semibold cursor-pointer bg-accent text-white hover:bg-accent-dark transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                type="button"
+                className={buttonPrimary}
                 disabled={!groupName.trim()}
                 onClick={handleCreateGroup}
               >
-                Create Group
+                Create group
               </button>
             </div>
           </div>
         </>
       )}
 
-      <div className="overflow-x-auto bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle max-md:text-[0.8rem]">
+      {/* Below md the table becomes a card list. Eleven columns on a 390px
+          screen scrolled sideways with no sticky first column, so once you
+          scrolled right you no longer knew which activity you were reading —
+          on the app's most-used screen. */}
+      <ul className="hidden max-md:flex flex-col gap-2 list-none">
+        {pagedItems.length === 0 && (
+          <li className="p-8 text-center text-text-muted text-sm bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle">
+            No activities match the current filters.
+          </li>
+        )}
+        {pagedItems.map((item) =>
+          item.type === 'group' ? (
+            <li key={`card-group-${item.group.id}`}>
+              <GroupCard
+                item={item}
+                isExpanded={expandedGroups.has(item.group.id)}
+                onToggleExpand={() => toggleGroupExpanded(item.group.id)}
+                scoreMap={scoreMap}
+                trainingActivityIds={trainingActivityIds}
+                toggleActivityCategory={toggleActivityCategory}
+              />
+            </li>
+          ) : (
+            <li key={`card-${item.activity.id}`}>
+              <ActivityCard
+                activity={item.activity}
+                isTraining={trainingActivityIds.includes(item.activity.id)}
+                isSelected={groupMode ? selectedIds.has(item.activity.id) : undefined}
+                onToggleSelect={groupMode ? (e) => toggleSelect(item.activity.id, e) : undefined}
+                toggleActivityCategory={toggleActivityCategory}
+                scoreMap={scoreMap}
+              />
+            </li>
+          )
+        )}
+      </ul>
+
+      <div className="max-md:hidden overflow-x-auto lg:overflow-visible bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
               <th className={`${thClass} first:rounded-tl-[var(--radius-lg)] w-10`}>
-                <span className="sr-only">{groupMode ? 'Select' : ''}</span>
+                <span className="sr-only">{groupMode ? 'Select' : 'Expand'}</span>
               </th>
-              <th
-                className={`${thClass} cursor-pointer select-none hover:text-text-primary transition-colors`}
-                onClick={() => handleSort('date')}
-              >
-                <span className="inline-flex items-center gap-1">
-                  Date
-                  {(sortColumn === 'date' || sortColumn === null) && (
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className={`transition-transform ${(sortColumn === null ? 'desc' : sortDirection) === 'asc' ? 'rotate-180' : ''}`}>
-                      <path d="M7 10l5 5 5-5z" />
-                    </svg>
-                  )}
-                </span>
-              </th>
-              <th className={thClass}>Name</th>
-              {(['type', 'distance', 'time', 'elevation', 'power', 'hr', 'score', 'category'] as SortColumn[]).map((col, i, arr) => {
-                const label = col === 'score' ? 'Ride Score' : col === 'hr' ? 'HR' : col!.charAt(0).toUpperCase() + col!.slice(1)
-                const isActive = sortColumn === col
-                const isLast = i === arr.length - 1
+              {COLUMNS.map((column, i) => {
+                const isActive = sortColumn === column.id || (column.id === 'date' && sortColumn === null)
+                const direction = sortColumn === null ? 'desc' : sortDirection
+                const isLast = i === COLUMNS.length - 1
                 return (
                   <th
-                    key={col}
-                    className={`${thClass} cursor-pointer select-none hover:text-text-primary transition-colors ${isLast ? 'last:rounded-tr-[var(--radius-lg)]' : ''}`}
-                    onClick={() => handleSort(col)}
+                    key={column.id ?? column.label}
+                    scope="col"
+                    aria-sort={
+                      !isActive ? 'none' : direction === 'asc' ? 'ascending' : 'descending'
+                    }
+                    className={`${column.numeric ? thNumeric : thClass} ${isLast ? 'last:rounded-tr-[var(--radius-lg)]' : ''}`}
                   >
-                    <span className="inline-flex items-center gap-1">
-                      {label}
-                      {isActive && (
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className={`transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`}>
+                    {column.id ? (
+                      // A real button: the header used to sort from `onClick` on
+                      // the `<th>`, which no keyboard could reach.
+                      <button
+                        type="button"
+                        onClick={() => handleSort(column.id)}
+                        className={`inline-flex items-center gap-1 uppercase tracking-wider font-semibold cursor-pointer bg-transparent border-none text-inherit transition-colors hover:text-text-primary ${
+                          column.numeric ? 'flex-row-reverse' : ''
+                        }`}
+                      >
+                        {column.label}
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                          className={`transition-transform ${isActive ? 'opacity-100' : 'opacity-0'} ${
+                            isActive && direction === 'asc' ? 'rotate-180' : ''
+                          }`}
+                        >
                           <path d="M7 10l5 5 5-5z" />
                         </svg>
-                      )}
-                    </span>
+                      </button>
+                    ) : (
+                      column.label
+                    )}
                   </th>
                 )
               })}
@@ -561,6 +654,7 @@ export function ActivityList({ activities }: ActivityListProps) {
                     setEditingGroupName={setEditingGroupName}
                     onFinishRename={handleFinishRename}
                     tdClass={tdClass}
+                    tdNumeric={tdNumeric}
                     scoreMap={scoreMap}
                     trainingActivityIds={trainingActivityIds}
                     toggleActivityCategory={toggleActivityCategory}
@@ -583,8 +677,8 @@ export function ActivityList({ activities }: ActivityListProps) {
                   toggleActivityCategory={toggleActivityCategory}
                   navigate={navigate}
                   tdClass={tdClass}
+                  tdNumeric={tdNumeric}
                   scoreMap={scoreMap}
-                  groupMode={groupMode}
                 />
               )
             })}
@@ -603,14 +697,14 @@ export function ActivityList({ activities }: ActivityListProps) {
       {groupMode && (
         <div className="sticky bottom-4 z-30 flex justify-center mt-4 animate-fade-in">
           <button
-            className="py-3 px-8 rounded-[var(--radius-md)] text-sm font-semibold cursor-pointer transition-all duration-150 bg-accent text-white hover:bg-accent-dark shadow-lg shadow-accent/25 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+            className={`${buttonPrimary} py-3 px-8 shadow-lg shadow-accent/25`}
             disabled={selectedIds.size < 2}
             onClick={() => {
               setGroupName('')
               setShowGroupNameModal(true)
             }}
           >
-            Confirm Group{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+            Confirm group{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
           </button>
         </div>
       )}
@@ -626,9 +720,9 @@ function ActivityRow({
   toggleActivityCategory,
   navigate,
   tdClass,
+  tdNumeric,
   scoreMap,
   indent,
-  groupMode,
 }: {
   activity: StravaActivity
   isTraining: boolean
@@ -637,9 +731,9 @@ function ActivityRow({
   toggleActivityCategory: (id: number) => void
   navigate: ReturnType<typeof useNavigate>
   tdClass: string
+  tdNumeric: string
   scoreMap: Map<number, number>
   indent?: boolean
-  groupMode?: boolean
 }) {
   return (
     <tr
@@ -656,64 +750,242 @@ function ActivityRow({
             checked={isSelected || false}
             onChange={() => {}}
             onClick={onToggleSelect}
+            aria-label={`Select ${activity.name}`}
             className="size-4 accent-accent cursor-pointer"
           />
         ) : indent ? (
           <span className="text-text-muted text-xs pl-2">-</span>
         ) : null}
       </td>
-      <td className={tdClass}>{formatDateFull(activity.start_date_local)}</td>
-      <td className={`${tdClass} font-semibold max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap max-md:max-w-[140px]`}>
+      <td className={`${tdClass} whitespace-nowrap`}>{formatDateFull(activity.start_date_local)}</td>
+      <td className={`${tdClass} font-semibold max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap`}>
         <Link
           to="/activities/$activityId"
           params={{ activityId: String(activity.id) }}
           className="text-text-primary no-underline hover:text-accent transition-colors"
           onClick={(e) => e.stopPropagation()}
+          title={activity.name}
         >
           {activity.name}
         </Link>
       </td>
       <td className={tdClass}>
-        <span className={`inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.7rem] font-semibold uppercase tracking-wide ${activityTypeClasses[activity.type.toLowerCase()] || 'bg-bg-tertiary text-text-secondary'}`}>
+        <span className={`inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold uppercase tracking-wide ${activityTypeClasses[activity.type.toLowerCase()] || 'bg-bg-tertiary text-text-secondary'}`}>
           {activity.type === 'VirtualRide' ? 'Zwift' : activity.type}
         </span>
       </td>
-      <td className={tdClass}>{metersToKm(activity.distance).toFixed(1)} km</td>
-      <td className={tdClass}>{secondsToHMS(activity.moving_time)}</td>
-      <td className={tdClass}>{activity.total_elevation_gain.toFixed(0)} m</td>
-      <td className={tdClass}>
-        {activity.average_watts ? `${Math.round(activity.average_watts)} W` : '-'}
+      <td className={tdNumeric}>{formatDistance(metersToKm(activity.distance))} km</td>
+      <td className={tdNumeric}>{formatDuration(activity.moving_time)}</td>
+      <td className={tdNumeric}>{formatElevation(activity.total_elevation_gain)} m</td>
+      <td className={tdNumeric}>
+        {activity.average_watts ? `${formatNumber(activity.average_watts)} W` : '–'}
       </td>
-      <td className={tdClass}>
-        {activity.average_heartrate
-          ? `${Math.round(activity.average_heartrate)} bpm`
-          : '-'}
+      <td className={tdNumeric}>
+        {activity.average_heartrate ? `${formatNumber(activity.average_heartrate)} bpm` : '–'}
       </td>
       <td className={tdClass}>
         {scoreMap.has(activity.id) ? (() => {
           const score = scoreMap.get(activity.id)!
           const label = getScoreLabel(score)
           return (
-            <span className={`inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.7rem] font-semibold ${scoreLabelClasses[label]}`}>
+            <span className={`inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold ${scoreLabelClasses[label]}`}>
               {score} · {label}
             </span>
           )
-        })() : '-'}
+        })() : '–'}
       </td>
       <td className={tdClass}>
-        <button
-          className={`py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.7rem] font-semibold cursor-pointer transition-all duration-150 whitespace-nowrap ${
-            isTraining
-              ? 'bg-warning/10 border border-warning/30 text-warning hover:bg-warning/20 hover:border-warning/50'
-              : 'bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 hover:border-accent/50'
-          }`}
-          onClick={() => toggleActivityCategory(activity.id)}
-          title={isTraining ? 'Mark as performance activity' : 'Mark as training activity'}
-        >
-          {isTraining ? 'Training' : 'Performance'}
-        </button>
+        <CategoryToggle
+          isTraining={isTraining}
+          onToggle={() => toggleActivityCategory(activity.id)}
+          name={activity.name}
+        />
       </td>
     </tr>
+  )
+}
+
+/**
+ * The only clickable pill in a column of pills, so it has to look like a
+ * control: a two-state switch rather than another badge in the same shape and
+ * size as the read-only ones beside it.
+ */
+function CategoryToggle({
+  isTraining,
+  onToggle,
+  name,
+}: {
+  isTraining: boolean
+  onToggle: () => void
+  name: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isTraining}
+      aria-label={`${name} is a ${isTraining ? 'training' : 'performance'} activity — click to change`}
+      onClick={onToggle}
+      title={isTraining ? 'Mark as performance activity' : 'Mark as training activity'}
+      className="inline-flex items-center gap-1 p-0.5 rounded-full bg-bg-tertiary border border-border cursor-pointer transition-colors duration-150 hover:border-text-muted"
+    >
+      <span
+        className={`px-2.5 py-0.5 rounded-full text-[0.75rem] font-semibold transition-colors ${
+          isTraining ? 'bg-warning/20 text-warning' : 'text-text-muted'
+        }`}
+      >
+        Training
+      </span>
+      <span
+        className={`px-2.5 py-0.5 rounded-full text-[0.75rem] font-semibold transition-colors ${
+          isTraining ? 'text-text-muted' : 'bg-accent/20 text-accent'
+        }`}
+      >
+        Performance
+      </span>
+    </button>
+  )
+}
+
+function ActivityCard({
+  activity,
+  isTraining,
+  isSelected,
+  onToggleSelect,
+  toggleActivityCategory,
+  scoreMap,
+}: {
+  activity: StravaActivity
+  isTraining: boolean
+  isSelected?: boolean
+  onToggleSelect?: (e: React.MouseEvent) => void
+  toggleActivityCategory: (id: number) => void
+  scoreMap: Map<number, number>
+}) {
+  const score = scoreMap.get(activity.id)
+  const label = score != null ? getScoreLabel(score) : null
+
+  return (
+    <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-md)] p-4 flex flex-col gap-3">
+      <div className="flex items-start gap-3">
+        {onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={isSelected || false}
+            onChange={() => {}}
+            onClick={onToggleSelect}
+            aria-label={`Select ${activity.name}`}
+            className="size-4 accent-accent cursor-pointer mt-1 shrink-0"
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <Link
+            to="/activities/$activityId"
+            params={{ activityId: String(activity.id) }}
+            className="text-text-primary no-underline font-semibold text-sm block leading-snug"
+          >
+            {activity.name}
+          </Link>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span className="text-[0.75rem] text-text-muted">{formatDateShort(activity.start_date_local)}</span>
+            <span className={`inline-block py-0.5 px-2 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold uppercase tracking-wide ${activityTypeClasses[activity.type.toLowerCase()] || 'bg-bg-tertiary text-text-secondary'}`}>
+              {activity.type === 'VirtualRide' ? 'Zwift' : activity.type}
+            </span>
+            {label && score != null && (
+              <span className={`inline-block py-0.5 px-2 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold ${scoreLabelClasses[label]}`}>
+                {score} · {label}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <CardStat label="Distance" value={`${formatDistance(metersToKm(activity.distance))} km`} />
+        <CardStat label="Time" value={formatDuration(activity.moving_time)} />
+        <CardStat
+          label={activity.average_watts ? 'Power' : 'Climb'}
+          value={
+            activity.average_watts
+              ? `${formatNumber(activity.average_watts)} W`
+              : `${formatElevation(activity.total_elevation_gain)} m`
+          }
+        />
+      </div>
+
+      <CategoryToggle
+        isTraining={isTraining}
+        onToggle={() => toggleActivityCategory(activity.id)}
+        name={activity.name}
+      />
+    </div>
+  )
+}
+
+function CardStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-bg-tertiary rounded-[var(--radius-sm)] py-2">
+      <div className="data-value text-sm text-text-primary font-medium">{value}</div>
+      <div className="text-[0.75rem] text-text-muted">{label}</div>
+    </div>
+  )
+}
+
+function GroupCard({
+  item,
+  isExpanded,
+  onToggleExpand,
+  scoreMap,
+  trainingActivityIds,
+  toggleActivityCategory,
+}: {
+  item: MergedGroup
+  isExpanded: boolean
+  onToggleExpand: () => void
+  scoreMap: Map<number, number>
+  trainingActivityIds: number[]
+  toggleActivityCategory: (id: number) => void
+}) {
+  return (
+    <div className="bg-bg-secondary border border-accent/25 rounded-[var(--radius-md)] p-4 flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={onToggleExpand}
+        aria-expanded={isExpanded}
+        className="flex items-center gap-2 text-left cursor-pointer bg-transparent border-none w-full"
+      >
+        <svg
+          width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          aria-hidden="true"
+          className={`text-accent shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+        >
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+        <span className="font-semibold text-sm text-accent min-w-0 flex-1">{item.group.name}</span>
+        <span className="text-[0.75rem] text-text-muted">{item.activities.length} activities</span>
+      </button>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <CardStat label="Distance" value={`${formatDistance(metersToKm(item.distance))} km`} />
+        <CardStat label="Time" value={formatDuration(item.movingTime)} />
+        <CardStat label="Climb" value={`${formatElevation(item.elevation)} m`} />
+      </div>
+
+      {isExpanded && (
+        <ul className="flex flex-col gap-2 list-none pl-3 border-l border-border-subtle">
+          {item.activities.map((activity) => (
+            <li key={activity.id}>
+              <ActivityCard
+                activity={activity}
+                isTraining={trainingActivityIds.includes(activity.id)}
+                toggleActivityCategory={toggleActivityCategory}
+                scoreMap={scoreMap}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -728,6 +1000,7 @@ function GroupRow({
   setEditingGroupName,
   onFinishRename,
   tdClass,
+  tdNumeric,
   scoreMap,
   trainingActivityIds,
   toggleActivityCategory,
@@ -744,6 +1017,7 @@ function GroupRow({
   setEditingGroupName: (name: string) => void
   onFinishRename: () => void
   tdClass: string
+  tdNumeric: string
   scoreMap: Map<number, number>
   trainingActivityIds: number[]
   toggleActivityCategory: (id: number) => void
@@ -767,17 +1041,28 @@ function GroupRow({
         onClick={onToggleExpand}
       >
         <td className={tdClass}>
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className={`text-accent transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+          {/* A button rather than a whole clickable row, so it can carry
+              aria-expanded and be reached by keyboard. */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleExpand() }}
+            aria-expanded={isExpanded}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${item.group.name}`}
+            className="flex items-center justify-center size-6 rounded-[var(--radius-sm)] cursor-pointer bg-transparent border-none text-accent hover:bg-bg-elevated transition-colors"
           >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+              className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
         </td>
         <td className={tdClass}>
           <span className="text-text-muted text-xs">
@@ -805,7 +1090,7 @@ function GroupRow({
                 <span className="bg-linear-to-r from-accent to-accent-light bg-clip-text text-transparent font-bold">
                   {item.group.name}
                 </span>
-                <span className="text-[0.65rem] text-text-muted bg-bg-tertiary py-0.5 px-1.5 rounded-full">
+                <span className="text-[0.75rem] text-text-muted bg-bg-tertiary py-0.5 px-1.5 rounded-full">
                   {item.activities.length}
                 </span>
               </>
@@ -815,26 +1100,26 @@ function GroupRow({
         <td className={tdClass}>
           <div className="flex flex-wrap gap-1">
             {types.map((t) => (
-              <span key={t} className={`inline-block py-1 px-2 rounded-[var(--radius-sm)] text-[0.65rem] font-semibold uppercase tracking-wide ${activityTypeClasses[t.toLowerCase()] || 'bg-bg-tertiary text-text-secondary'}`}>
+              <span key={t} className={`inline-block py-1 px-2 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold uppercase tracking-wide ${activityTypeClasses[t.toLowerCase()] || 'bg-bg-tertiary text-text-secondary'}`}>
                 {t === 'VirtualRide' ? 'Zwift' : t}
               </span>
             ))}
           </div>
         </td>
-        <td className={`${tdClass} font-medium`}>{metersToKm(item.distance).toFixed(1)} km</td>
-        <td className={`${tdClass} font-medium`}>{secondsToHMS(item.movingTime)}</td>
-        <td className={`${tdClass} font-medium`}>{item.elevation.toFixed(0)} m</td>
-        <td className={`${tdClass} font-medium`}>
-          {item.avgWatts ? `${Math.round(item.avgWatts)} W` : '-'}
+        <td className={`${tdNumeric} font-medium`}>{formatDistance(metersToKm(item.distance))} km</td>
+        <td className={`${tdNumeric} font-medium`}>{formatDuration(item.movingTime)}</td>
+        <td className={`${tdNumeric} font-medium`}>{formatElevation(item.elevation)} m</td>
+        <td className={`${tdNumeric} font-medium`}>
+          {item.avgWatts ? `${formatNumber(item.avgWatts)} W` : '–'}
         </td>
-        <td className={`${tdClass} font-medium`}>
-          {item.avgHR ? `${Math.round(item.avgHR)} bpm` : '-'}
+        <td className={`${tdNumeric} font-medium`}>
+          {item.avgHR ? `${formatNumber(item.avgHR)} bpm` : '–'}
         </td>
         <td className={`${tdClass} font-medium`}>
           {avgScore != null ? (() => {
             const label = getScoreLabel(avgScore)
             return (
-              <span className={`inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.7rem] font-semibold ${scoreLabelClasses[label]}`}>
+              <span className={`inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold ${scoreLabelClasses[label]}`}>
                 {avgScore} · {label}
               </span>
             )
@@ -844,14 +1129,14 @@ function GroupRow({
           {groupMode ? (
             <div className="flex items-center gap-1">
               <button
-                className="py-1 px-2 rounded text-[0.65rem] font-medium cursor-pointer bg-bg-tertiary border border-border text-text-muted hover:text-text-primary hover:border-text-muted transition-all duration-150"
+                className="py-1 px-2 rounded text-[0.75rem] font-medium cursor-pointer bg-bg-tertiary border border-border text-text-muted hover:text-text-primary hover:border-text-muted transition-all duration-150"
                 onClick={onStartRename}
                 title="Rename group"
               >
                 Rename
               </button>
               <button
-                className="py-1 px-2 rounded text-[0.65rem] font-medium cursor-pointer bg-danger/10 border border-danger/20 text-danger hover:bg-danger/20 hover:border-danger/40 transition-all duration-150"
+                className="py-1 px-2 rounded text-[0.75rem] font-medium cursor-pointer bg-danger/10 border border-danger/20 text-danger hover:bg-danger/20 hover:border-danger/40 transition-all duration-150"
                 onClick={onDelete}
                 title="Ungroup activities"
               >
@@ -861,10 +1146,10 @@ function GroupRow({
           ) : (() => {
             const groupIsTraining = item.activities.length > 0 && trainingActivityIds.includes(item.activities[0].id)
             return (
-              <span className={`inline-block py-1.5 px-3 rounded-[var(--radius-sm)] text-[0.7rem] font-semibold whitespace-nowrap ${
-                groupIsTraining
-                  ? 'bg-warning/10 border border-warning/30 text-warning'
-                  : 'bg-accent/10 border border-accent/30 text-accent'
+              // Read-only: the group's category follows its members, so this is
+              // a label and is styled as one — no border, no hover.
+              <span className={`inline-block text-[0.75rem] font-semibold whitespace-nowrap ${
+                groupIsTraining ? 'text-warning' : 'text-accent'
               }`}>
                 {groupIsTraining ? 'Training' : 'Performance'}
               </span>
@@ -884,6 +1169,7 @@ function GroupRow({
             toggleActivityCategory={toggleActivityCategory}
             navigate={navigate}
             tdClass={tdClass}
+            tdNumeric={tdNumeric}
             scoreMap={scoreMap}
             indent
           />

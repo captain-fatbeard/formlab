@@ -8,6 +8,7 @@ interface ActivityMapProps {
 export function ActivityMap({ polyline }: ActivityMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const leafletMapRef = useRef<LeafletMap | null>(null)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [error, setError] = useState(false)
 
   useEffect(() => {
@@ -37,14 +38,21 @@ export function ActivityMap({ polyline }: ActivityMapProps) {
 
         const map = L.default.map(mapRef.current, {
           zoomControl: true,
-          attributionControl: false,
+          // The OpenStreetMap and CARTO tile licences both require credit —
+          // this was switched off, which is a licensing problem as well as a
+          // missing affordance.
+          attributionControl: true,
         })
         leafletMapRef.current = map
 
         // Dark CartoDB tiles to match app theme
         L.default.tileLayer(
           'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-          { maxZoom: 19 }
+          {
+            maxZoom: 19,
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          }
         ).addTo(map)
 
         // Route line in accent color
@@ -72,7 +80,19 @@ export function ActivityMap({ polyline }: ActivityMapProps) {
           weight: 2,
         }).addTo(map)
 
-        map.fitBounds(routeLine.getBounds(), { padding: [30, 30] })
+        // Fit after a frame, and again whenever the card resizes: fitting
+        // against a container Leaflet has not measured yet leaves the route as
+        // a fifth of a map showing half the Baltic.
+        const bounds = routeLine.getBounds()
+        const fit = () => {
+          map.invalidateSize()
+          map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 })
+        }
+        requestAnimationFrame(fit)
+
+        const observer = new ResizeObserver(fit)
+        observer.observe(mapRef.current)
+        resizeObserverRef.current = observer
       } catch {
         setError(true)
       }
@@ -82,6 +102,8 @@ export function ActivityMap({ polyline }: ActivityMapProps) {
 
     return () => {
       cancelled = true
+      resizeObserverRef.current?.disconnect()
+      resizeObserverRef.current = null
       if (leafletMapRef.current) {
         leafletMapRef.current.remove()
         leafletMapRef.current = null
