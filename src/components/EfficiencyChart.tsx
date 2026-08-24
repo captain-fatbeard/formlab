@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
   XAxis,
   YAxis,
@@ -15,15 +15,19 @@ import { calculateEF } from '~/lib/performance'
 import { chartTheme, tooltipStyle, formatDateShort, activityTooltipLabel } from '~/lib/chart-theme'
 import { isRide } from '~/lib/activities'
 import { calculateTrendLine } from '~/lib/trend'
-import { trendClasses } from '~/lib/styles'
+import { trendClasses, sectionCard, cardTitle } from '~/lib/styles'
 import { RangeSelector } from './RangeSelector'
+import { useLocalRange } from '~/lib/use-local-range'
+import { InsufficientData, MIN_TREND_POINTS } from './InsufficientData'
+import { MetricTerm } from './MetricTerm'
 
 interface EfficiencyChartProps {
   lifetimeActivities: StravaActivity[]
 }
 
 export function EfficiencyChart({ lifetimeActivities }: EfficiencyChartProps) {
-  const [efDays, setEfDays] = useState(90)
+  const range = useLocalRange()
+  const efDays = range.days
 
   const allEfficiencyData = useMemo(() => {
     const rides = lifetimeActivities
@@ -55,16 +59,24 @@ export function EfficiencyChart({ lifetimeActivities }: EfficiencyChartProps) {
   )
 
   const hasNoData = allEfficiencyData.length === 0
-  const hasNoDataInRange = efficiencyData.length === 0
+  const belowThreshold = efficiencyData.length < MIN_TREND_POINTS
 
   return (
-    <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-      <div className="flex justify-between items-center mb-5 max-md:flex-col max-md:items-start max-md:gap-3">
-        <div className="flex items-center gap-4">
-          <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">Efficiency Factor Over Time</h3>
-          {!hasNoData && <RangeSelector days={efDays} onChange={setEfDays} />}
+    <div className={sectionCard}>
+      <div className="flex justify-between items-center mb-5 gap-3 max-md:flex-col max-md:items-start">
+        <div className="flex items-center gap-4 flex-wrap">
+          <h3 className={cardTitle}>Efficiency factor over time</h3>
+          {!hasNoData && (
+            <RangeSelector
+              days={efDays}
+              onChange={range.setDays}
+              globalDays={range.globalDays}
+              isOverride={range.isOverride}
+              onReset={range.reset}
+            />
+          )}
         </div>
-        {efTrendLine && (
+        {!belowThreshold && efTrendLine && (
           <span className={`text-xs py-1.5 px-3.5 rounded-full font-semibold ${trendClasses[efTrendLine.trend]}`}>
             {efTrendLine.trend === 'improving' && '↑ Improving'}
             {efTrendLine.trend === 'declining' && '↓ Declining'}
@@ -76,10 +88,12 @@ export function EfficiencyChart({ lifetimeActivities }: EfficiencyChartProps) {
         <div className="text-text-muted text-center py-16 text-[0.9rem]">
           Need rides with both power and heart rate data to calculate efficiency.
         </div>
-      ) : hasNoDataInRange ? (
-        <div className="text-text-muted text-center py-16 text-[0.9rem]">
-          No rides with power and heart rate in the selected range.
-        </div>
+      ) : belowThreshold ? (
+        <InsufficientData
+          count={efficiencyData.length}
+          needed={MIN_TREND_POINTS}
+          noun="rides with power and heart rate"
+        />
       ) : (
         <>
           <ResponsiveContainer width="100%" height={300}>
@@ -126,12 +140,10 @@ export function EfficiencyChart({ lifetimeActivities }: EfficiencyChartProps) {
               )}
             </ComposedChart>
           </ResponsiveContainer>
-          <div className="mt-5 p-4 bg-bg-tertiary rounded-[var(--radius-md)] text-[0.8rem] text-text-secondary leading-relaxed">
-            <p>
-              <strong className="text-accent">EF = Normalized Power / Avg Heart Rate</strong> — higher is better.
-              An improving trend means you're producing more power at the same heart rate.
-            </p>
-          </div>
+          <p className="mt-4 text-[0.8125rem] text-text-muted leading-relaxed">
+            <MetricTerm id="ef">EF</MetricTerm> is normalised power divided by average heart rate —
+            higher is better. A rising trend means more power for the same heartbeat.
+          </p>
         </>
       )}
     </div>

@@ -1,13 +1,12 @@
 import { useMemo } from 'react'
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { type StravaActivity } from '~/lib/strava'
-import {
-  getPowerZones,
-  calculateZoneDistribution,
-} from '~/lib/performance'
-import { secondsToHMS } from '~/lib/strava'
+import { getPowerZones, calculateZoneDistribution } from '~/lib/performance'
 import { useDashboard } from '~/lib/dashboard-context'
-import { zoneColors, tooltipStyle } from '~/lib/chart-theme'
+import { zoneColors } from '~/lib/chart-theme'
+import { ZoneDistribution, type ZoneRow } from './ZoneDistribution'
+import { MetricTerm } from './MetricTerm'
+import { sectionCard, cardTitle } from '~/lib/styles'
+import { formatNumber } from '~/lib/format'
 
 interface PowerZonesChartProps {
   activities: StravaActivity[]
@@ -19,30 +18,30 @@ export function PowerZonesChart({ activities }: PowerZonesChartProps) {
   const { profile } = useDashboard()
   const ftp = profile.ftp || null
 
-  const zoneData = useMemo(() => {
+  // Every zone, in Z1→Z7 order, including the ones with no time in them: a
+  // zone you never touched is a fact about your training, not missing data.
+  const zones = useMemo<ZoneRow[]>(() => {
     if (!ftp) return []
-    const data = calculateZoneDistribution(activities, ftp)
-    // Override colors with theme colors
-    return data.map((d, i) => ({
-      ...d,
-      color: zoneColors[i] || d.color,
-    }))
+    const distribution = calculateZoneDistribution(activities, ftp)
+    return getPowerZones(ftp).map((zone, i) => {
+      const match = distribution.find((d) => d.zone === zone.name)
+      return {
+        key: `Z${i + 1}`,
+        name: zone.name,
+        range: `${formatNumber(zone.min)}–${zone.max === 9999 ? '∞' : formatNumber(zone.max)} W`,
+        seconds: match?.time ?? 0,
+        percentage: match?.percentage ?? 0,
+        color: zoneColors[i] || zone.color,
+      }
+    })
   }, [activities, ftp])
 
-  const zones = useMemo(() => {
-    if (!ftp) return []
-    const z = getPowerZones(ftp)
-    // Override colors with theme colors
-    return z.map((zone, i) => ({
-      ...zone,
-      color: zoneColors[i] || zone.color,
-    }))
-  }, [ftp])
+  const hasTime = zones.some((z) => z.seconds > 0)
 
-  if (!ftp || zoneData.length === 0) {
+  if (!ftp || !hasTime) {
     return (
-      <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-        <h3 className="text-lg font-semibold mb-5 text-text-primary max-[480px]:text-base">Power Zones</h3>
+      <div className={sectionCard}>
+        <h3 className={`${cardTitle} mb-5`}>Power zones</h3>
         <div className="text-text-muted text-center py-16 text-[0.9rem]">
           Need rides with power data to show zone distribution.
         </div>
@@ -51,78 +50,15 @@ export function PowerZonesChart({ activities }: PowerZonesChartProps) {
   }
 
   return (
-    <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-      <div className="flex justify-between items-center mb-5 max-md:flex-col max-md:items-start max-md:gap-3">
-        <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">Power Zones</h3>
-        <span className="bg-linear-to-br from-accent to-accent-dark text-white py-1.5 px-4 rounded-full text-sm font-semibold shadow-[0_2px_8px_rgba(20,184,166,0.3)]">FTP: {ftp}W</span>
+    <div className={sectionCard}>
+      <div className="flex justify-between items-center mb-5 gap-3 max-md:flex-col max-md:items-start">
+        <h3 className={cardTitle}>Power zones</h3>
+        <span className="bg-accent/15 border border-accent/30 text-accent py-1 px-3.5 rounded-full text-[0.8125rem] font-semibold data-value">
+          <MetricTerm id="ftp">FTP</MetricTerm> {formatNumber(ftp)} W
+        </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-8 items-start max-md:grid-cols-1">
-        <div>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={zoneData}
-                dataKey="time"
-                nameKey="zone"
-                cx="50%"
-                cy="50%"
-                outerRadius={90}
-                innerRadius={50}
-                paddingAngle={2}
-                label={({ zone, percentage }) =>
-                  percentage > 5 ? `${percentage}%` : ''
-                }
-                labelLine={false}
-              >
-                {zoneData.map((entry, index) => (
-                  <Cell key={index} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                {...tooltipStyle}
-                formatter={(value: number, name: string) => [
-                  secondsToHMS(value),
-                  name,
-                ]}
-              />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th className="text-left p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">Zone</th>
-                <th className="text-left p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">Power</th>
-                <th className="text-left p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {zones.map((zone) => {
-                const data = zoneData.find((d) => d.zone === zone.name)
-                return (
-                  <tr key={zone.name}>
-                    <td className="p-3 border-b border-border-subtle">
-                      <span
-                        className="inline-block size-3 rounded-full mr-2"
-                        style={{ backgroundColor: zone.color }}
-                      />
-                      {zone.name}
-                    </td>
-                    <td className="p-3 border-b border-border-subtle">
-                      {zone.min}-{zone.max === 9999 ? '∞' : zone.max}W
-                    </td>
-                    <td className="p-3 border-b border-border-subtle">{data ? secondsToHMS(data.time) : '-'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <ZoneDistribution zones={zones} rangeHeader="Power" label="Time in power zones" />
     </div>
   )
 }

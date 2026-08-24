@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
   LineChart,
   Line,
@@ -18,14 +18,21 @@ import { isRide } from '~/lib/activities'
 import { calculateTrendLine } from '~/lib/trend'
 import { trendClasses } from '~/lib/styles'
 import { RangeSelector } from './RangeSelector'
+import { useLocalRange } from '~/lib/use-local-range'
+import { InsufficientData, MIN_TREND_POINTS } from './InsufficientData'
+import { MetricTerm } from './MetricTerm'
+import { sectionCard, cardTitle } from '~/lib/styles'
 
 interface PerformanceChartsProps {
   lifetimeActivities: StravaActivity[]
 }
 
 export function PerformanceCharts({ lifetimeActivities }: PerformanceChartsProps) {
-  const [powerDays, setPowerDays] = useState(90)
-  const [hrDays, setHrDays] = useState(90)
+  // Both cards start on the top-bar range and say so when pulled off it.
+  const power = useLocalRange()
+  const hr = useLocalRange()
+  const powerDays = power.days
+  const hrDays = hr.days
 
   const allPowerTrendData = useMemo(() => {
     const rides = lifetimeActivities
@@ -73,20 +80,29 @@ export function PerformanceCharts({ lifetimeActivities }: PerformanceChartsProps
   }, [allHrTrendData, hrDays])
 
   const hasNoPowerData = allPowerTrendData.length === 0
-  const hasNoPowerDataInRange = powerTrendData.length === 0
+  // A trend through three rides is noise drawn confidently — see F16.
+  const powerBelowThreshold = powerTrendData.length < MIN_TREND_POINTS
   const hasNoHRData = allHrTrendData.length === 0
-  const hasNoHRDataInRange = hrTrendData.length === 0
+  const hrBelowThreshold = hrTrendData.length < MIN_TREND_POINTS
 
   return (
     <div className="flex flex-col gap-8">
       {/* Power Trend Chart */}
-      <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-        <div className="flex justify-between items-center mb-5 max-md:flex-col max-md:items-start max-md:gap-3">
-          <div className="flex items-center gap-4">
-            <h3 className="text-lg font-semibold text-text-primary">Power Trend</h3>
-            {!hasNoPowerData && <RangeSelector days={powerDays} onChange={setPowerDays} />}
+      <div className={sectionCard}>
+        <div className="flex justify-between items-center mb-5 gap-3 max-md:flex-col max-md:items-start">
+          <div className="flex items-center gap-4 flex-wrap">
+            <h3 className={cardTitle}>Power trend</h3>
+            {!hasNoPowerData && (
+              <RangeSelector
+                days={powerDays}
+                onChange={power.setDays}
+                globalDays={power.globalDays}
+                isOverride={power.isOverride}
+                onReset={power.reset}
+              />
+            )}
           </div>
-          {powerTrendLine && (
+          {!powerBelowThreshold && powerTrendLine && (
             <span className={`text-xs py-1.5 px-3.5 rounded-full font-semibold ${trendClasses[powerTrendLine.trend]}`}>
               {powerTrendLine.trend === 'improving' && '↑ Improving'}
               {powerTrendLine.trend === 'declining' && '↓ Declining'}
@@ -96,8 +112,12 @@ export function PerformanceCharts({ lifetimeActivities }: PerformanceChartsProps
         </div>
         {hasNoPowerData ? (
           <div className="text-text-muted text-center py-16 text-[0.9rem]">No power data available. Use a power meter or smart trainer.</div>
-        ) : hasNoPowerDataInRange ? (
-          <div className="text-text-muted text-center py-16 text-[0.9rem]">No rides with power data in the selected range.</div>
+        ) : powerBelowThreshold ? (
+          <InsufficientData
+            count={powerTrendData.length}
+            needed={MIN_TREND_POINTS}
+            noun="rides with power"
+          />
         ) : (
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={powerTrendData}>
@@ -139,23 +159,33 @@ export function PerformanceCharts({ lifetimeActivities }: PerformanceChartsProps
             </LineChart>
           </ResponsiveContainer>
         )}
-        {!hasNoPowerData && !hasNoPowerDataInRange && (
-          <div className="mt-5 p-5 bg-bg-tertiary rounded-[var(--radius-md)] text-[0.8rem] text-text-secondary leading-relaxed">
-            <p className="mb-2"><strong className="text-accent">Avg Power</strong> — simple average of your power output over the ride. Doesn't account for intensity spikes.</p>
-            <p><strong className="text-accent">Normalized Power</strong> — weighted average that better reflects the true physiological cost of a ride. Accounts for surges and variable effort, so it's always equal to or higher than avg power.</p>
-          </div>
+        {!hasNoPowerData && !powerBelowThreshold && (
+          <p className="mt-4 text-[0.8125rem] text-text-muted leading-relaxed">
+            Average power is the plain mean; <MetricTerm id="np">normalised power</MetricTerm> weights
+            surges, so it is always equal to or higher.
+          </p>
         )}
       </div>
 
       {/* Heart Rate Trend */}
       {!hasNoHRData && (
-        <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-          <div className="flex items-center gap-4 mb-5">
-            <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">Heart Rate Trend</h3>
-            <RangeSelector days={hrDays} onChange={setHrDays} />
+        <div className={sectionCard}>
+          <div className="flex items-center gap-4 mb-5 flex-wrap">
+            <h3 className={cardTitle}>Heart rate trend</h3>
+            <RangeSelector
+              days={hrDays}
+              onChange={hr.setDays}
+              globalDays={hr.globalDays}
+              isOverride={hr.isOverride}
+              onReset={hr.reset}
+            />
           </div>
-          {hasNoHRDataInRange ? (
-            <div className="text-text-muted text-center py-16 text-[0.9rem]">No rides with heart rate data in the selected range.</div>
+          {hrBelowThreshold ? (
+            <InsufficientData
+              count={hrTrendData.length}
+              needed={MIN_TREND_POINTS}
+              noun="rides with heart rate"
+            />
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={hrTrendData}>
