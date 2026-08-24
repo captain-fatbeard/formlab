@@ -1,10 +1,11 @@
-import { useMemo, useState, useCallback, useEffect } from 'react'
+import { Fragment, useMemo, useState, useCallback, useEffect } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { type StravaActivity, metersToKm } from '~/lib/strava'
 import { useDashboard, type ActivityGroup } from '~/lib/dashboard-context'
 import {
   formatDateFull,
   formatDateShort,
+  formatMonthYear,
   formatNumber,
   formatDistance,
   formatElevation,
@@ -17,7 +18,6 @@ import { getScoreLabel, scoreLabelClasses, activityTypeClasses } from '~/lib/act
 import { rollup } from '~/lib/rollup'
 import { Pagination } from '~/components/Pagination'
 
-const ACTIVITIES_PAGE_SIZE = 25
 
 interface ActivityListProps {
   activities: StravaActivity[]
@@ -30,19 +30,41 @@ type TypeFilter = 'all' | 'ride' | 'zwift' | 'run'
 type CategoryFilter = 'all' | 'training' | 'performance'
 type ScoreFilter = 'all' | 'Easy' | 'Moderate' | 'Solid' | 'Hard' | 'Epic'
 
-/** The table's columns, in order. `id: null` means the column can't be sorted. */
-const COLUMNS: Array<{ id: Exclude<SortColumn, null> | null; label: string; numeric?: boolean }> = [
-  { id: 'date', label: 'Date' },
-  { id: null, label: 'Name' },
-  { id: 'type', label: 'Type' },
-  { id: 'distance', label: 'Distance', numeric: true },
-  { id: 'time', label: 'Time', numeric: true },
-  { id: 'elevation', label: 'Elevation', numeric: true },
-  { id: 'power', label: 'Power', numeric: true },
-  { id: 'hr', label: 'HR', numeric: true },
-  { id: 'score', label: 'Ride score' },
-  { id: 'category', label: 'Category' },
+/**
+ * The table's columns, in order. `id: null` means the column can't be sorted;
+ * `secondary` means it gives way between `md` and `lg`, where eleven columns
+ * would otherwise force horizontal scrolling and cost the reader their place.
+ * Below `md` the table is replaced by the card list entirely.
+ */
+const COLUMNS: Array<{
+  id: Exclude<SortColumn, null> | null
+  label: string
+  numeric?: boolean
+  secondary?: boolean
+  /** Fixed track width. `null` takes whatever is left — only the name does. */
+  width: string | null
+}> = [
+  { id: 'date', label: 'Date', width: 'w-[8rem]' },
+  { id: null, label: 'Name', width: null },
+  { id: 'type', label: 'Type', width: 'w-[5.5rem]' },
+  { id: 'distance', label: 'Distance', numeric: true, width: 'w-[6.5rem]' },
+  { id: 'time', label: 'Time', numeric: true, width: 'w-[5.5rem]' },
+  { id: 'elevation', label: 'Elevation', numeric: true, secondary: true, width: 'w-[6rem]' },
+  { id: 'power', label: 'Power', numeric: true, secondary: true, width: 'w-[5.5rem]' },
+  { id: 'hr', label: 'HR', numeric: true, secondary: true, width: 'w-[6rem]' },
+  { id: 'score', label: 'Ride score', width: 'w-[8.5rem]' },
+  { id: 'category', label: 'Category', width: 'w-[8.5rem]' },
 ]
+
+/**
+ * Applied to both the header cell and the body cell of a secondary column.
+ * Below `xl` there isn't room for eleven columns, and a table that overflows
+ * its own container spills its last column past the border.
+ */
+const SECONDARY_COLUMN = 'max-xl:hidden'
+
+/** How many rows a page holds. A long filter is worth reading in fewer pages. */
+const PAGE_SIZES = [25, 50, 100] as const
 
 const DISTANCE_OPTIONS = [
   { value: 0, label: 'Any distance' },
@@ -110,6 +132,7 @@ export function ActivityList({ activities }: ActivityListProps) {
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0])
 
   const closeGroupModal = useCallback(() => setShowGroupNameModal(false), [])
   const groupModalRef = useModalPanel<HTMLDivElement>(showGroupNameModal, closeGroupModal)
@@ -259,12 +282,41 @@ export function ActivityList({ activities }: ActivityListProps) {
   // Reset to first page when filters/sort change.
   useEffect(() => {
     setPage(1)
-  }, [searchQuery, sortColumn, sortDirection, typeFilter, categoryFilter, scoreFilter, minDistanceKm, yearFilter])
+  }, [searchQuery, sortColumn, sortDirection, typeFilter, categoryFilter, scoreFilter, minDistanceKm, yearFilter, pageSize])
 
   const pagedItems = useMemo(
-    () => listItems.slice((page - 1) * ACTIVITIES_PAGE_SIZE, page * ACTIVITIES_PAGE_SIZE),
-    [listItems, page]
+    () => listItems.slice((page - 1) * pageSize, page * pageSize),
+    [listItems, page, pageSize]
   )
+
+  /**
+   * Totals for everything the filters match, not just the page on screen.
+   * A filtered analytics table that can't tell you what it adds up to makes
+   * the reader export it to a spreadsheet to find out.
+   */
+  const totals = useMemo(() => {
+    let distance = 0
+    let movingTime = 0
+    let elevation = 0
+    let count = 0
+    for (const item of listItems) {
+      if (item.type === 'single') {
+        distance += item.activity.distance
+        movingTime += item.activity.moving_time
+        elevation += item.activity.total_elevation_gain
+        count += 1
+      } else {
+        distance += item.distance
+        movingTime += item.movingTime
+        elevation += item.elevation
+        count += item.activities.length
+      }
+    }
+    return { distance, movingTime, elevation, count }
+  }, [listItems])
+
+  // Month headings only mean something while the table is in date order.
+  const inDateOrder = sortColumn === null || sortColumn === 'date'
 
   const toggleSelect = useCallback((id: number, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -354,11 +406,9 @@ export function ActivityList({ activities }: ActivityListProps) {
     )
   }
 
-  // Sticky at the height of the top bar, so the column you are reading is still
-  // named 25 rows down.
-  const thClass = "text-left p-4 px-5 bg-bg-tertiary text-text-muted font-semibold uppercase text-[0.75rem] tracking-wider lg:sticky lg:top-14 lg:z-10"
+  const thClass = "text-left py-3.5 px-4 bg-bg-tertiary text-text-muted font-semibold uppercase text-[0.75rem] tracking-wider"
   const thNumeric = `${thClass} text-right`
-  const tdClass = "p-4 px-5 border-b border-border-subtle"
+  const tdClass = "py-3.5 px-4 border-b border-border-subtle"
   // Numbers are what this table is scanned for, so they are right-aligned and
   // set in the tabular figures the rest of the app uses.
   const tdNumeric = `${tdClass} text-right data-value whitespace-nowrap`
@@ -378,8 +428,21 @@ export function ActivityList({ activities }: ActivityListProps) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name..."
-            className="w-full bg-bg-tertiary border border-border text-text-primary py-1.5 pl-9 pr-3 rounded-[var(--radius-sm)] text-[0.8rem] transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15"
+            aria-label="Search activities by name"
+            className="w-full bg-bg-tertiary border border-border text-text-primary py-1.5 pl-9 pr-8 rounded-[var(--radius-sm)] text-[0.8rem] transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center size-5 text-text-muted hover:text-text-primary bg-transparent border-none cursor-pointer"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Type segmented control */}
@@ -470,6 +533,20 @@ export function ActivityList({ activities }: ActivityListProps) {
             {listItems.length} result{listItems.length === 1 ? '' : 's'}
           </span>
         )}
+
+        <label className="flex items-center gap-2 text-[0.75rem] text-text-muted shrink-0">
+          <span className="max-md:hidden">Rows</span>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            aria-label="Rows per page"
+            className={filterSelectClass}
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </label>
 
         <div className="ml-auto flex items-center gap-3 max-md:ml-0 max-md:basis-full max-md:justify-between">
           <button
@@ -578,11 +655,14 @@ export function ActivityList({ activities }: ActivityListProps) {
         )}
       </ul>
 
-      <div className="max-md:hidden overflow-x-auto lg:overflow-visible bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle">
-        <table className="w-full border-collapse text-sm">
+      {/* `overflow-x-auto` at every width: the table used to be allowed to
+          overflow visibly above lg, which pushed the Category column out past
+          the container's right border. Fixed layout keeps it inside. */}
+      <div className="max-md:hidden overflow-x-auto bg-bg-secondary rounded-[var(--radius-lg)] border border-border-subtle">
+        <table className="w-full min-w-[52rem] table-fixed border-collapse text-sm">
           <thead>
             <tr>
-              <th className={`${thClass} first:rounded-tl-[var(--radius-lg)] w-10`}>
+              <th className={`${thClass} first:rounded-tl-[var(--radius-lg)] w-9 px-3`}>
                 <span className="sr-only">{groupMode ? 'Select' : 'Expand'}</span>
               </th>
               {COLUMNS.map((column, i) => {
@@ -596,7 +676,7 @@ export function ActivityList({ activities }: ActivityListProps) {
                     aria-sort={
                       !isActive ? 'none' : direction === 'asc' ? 'ascending' : 'descending'
                     }
-                    className={`${column.numeric ? thNumeric : thClass} ${isLast ? 'last:rounded-tr-[var(--radius-lg)]' : ''}`}
+                    className={`${column.numeric ? thNumeric : thClass} ${column.width ?? ''} ${column.secondary ? SECONDARY_COLUMN : ''} ${isLast ? 'last:rounded-tr-[var(--radius-lg)]' : ''}`}
                   >
                     {column.id ? (
                       // A real button: the header used to sort from `onClick` on
@@ -604,7 +684,7 @@ export function ActivityList({ activities }: ActivityListProps) {
                       <button
                         type="button"
                         onClick={() => handleSort(column.id)}
-                        className={`inline-flex items-center gap-1 uppercase tracking-wider font-semibold cursor-pointer bg-transparent border-none text-inherit transition-colors hover:text-text-primary ${
+                        className={`group inline-flex items-center gap-1 uppercase tracking-wider font-semibold cursor-pointer bg-transparent border-none text-inherit transition-colors hover:text-text-primary ${
                           column.numeric ? 'flex-row-reverse' : ''
                         }`}
                       >
@@ -615,7 +695,10 @@ export function ActivityList({ activities }: ActivityListProps) {
                           viewBox="0 0 24 24"
                           fill="currentColor"
                           aria-hidden="true"
-                          className={`transition-transform ${isActive ? 'opacity-100' : 'opacity-0'} ${
+                          // An inactive column shows its arrow faintly on
+                          // hover, so a sortable header looks sortable before
+                          // you click it.
+                          className={`transition-all ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'} ${
                             isActive && direction === 'asc' ? 'rotate-180' : ''
                           }`}
                         >
@@ -638,12 +721,32 @@ export function ActivityList({ activities }: ActivityListProps) {
                 </td>
               </tr>
             )}
-            {pagedItems.map((item) => {
+            {pagedItems.map((item, index) => {
+              // A month heading before the first row of each month: a training
+              // log is read by period, and 25 undifferentiated rows of dates
+              // give the reader nothing to anchor on.
+              const previous = index > 0 ? pagedItems[index - 1] : null
+              const monthOf = (entry: ListItem) =>
+                formatMonthYear(entry.type === 'single' ? entry.activity.start_date_local : entry.latestDate)
+              const month = monthOf(item)
+              const heading =
+                inDateOrder && (previous === null || monthOf(previous) !== month) ? (
+                  <tr key={`month-${month}`}>
+                    <td
+                      colSpan={COLUMNS.length + 1}
+                      className="px-5 pt-6 pb-2 border-b border-border-subtle text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold bg-bg-secondary"
+                    >
+                      {month}
+                    </td>
+                  </tr>
+                ) : null
+
               if (item.type === 'group') {
                 const isExpanded = expandedGroups.has(item.group.id)
                 return (
+                  <Fragment key={`group-${item.group.id}`}>
+                  {heading}
                   <GroupRow
-                    key={`group-${item.group.id}`}
                     item={item}
                     isExpanded={isExpanded}
                     onToggleExpand={() => toggleGroupExpanded(item.group.id)}
@@ -661,6 +764,7 @@ export function ActivityList({ activities }: ActivityListProps) {
                     navigate={navigate}
                     groupMode={groupMode}
                   />
+                  </Fragment>
                 )
               }
 
@@ -668,8 +772,9 @@ export function ActivityList({ activities }: ActivityListProps) {
               const isTraining = trainingActivityIds.includes(activity.id)
               const isSelected = selectedIds.has(activity.id)
               return (
+                <Fragment key={activity.id}>
+                {heading}
                 <ActivityRow
-                  key={activity.id}
                   activity={activity}
                   isTraining={isTraining}
                   isSelected={groupMode ? isSelected : undefined}
@@ -680,18 +785,42 @@ export function ActivityList({ activities }: ActivityListProps) {
                   tdNumeric={tdNumeric}
                   scoreMap={scoreMap}
                 />
+                </Fragment>
               )
             })}
           </tbody>
+
+          {/* What the filter adds up to — over everything it matches, not just
+              the page on screen. */}
+          {totals.count > 0 && (
+            <tfoot>
+              <tr className="[&_td]:bg-bg-tertiary/60 [&_td]:border-t [&_td]:border-border">
+                <td className={`${tdClass} border-b-0`} />
+                <td className={`${tdClass} border-b-0 text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold whitespace-nowrap`}>
+                  Totals
+                </td>
+                <td className={`${tdClass} border-b-0 text-[0.75rem] text-text-muted`} colSpan={2}>
+                  {formatNumber(totals.count)} {totals.count === 1 ? 'activity' : 'activities'}
+                  {listItems.length !== totals.count && ` in ${formatNumber(listItems.length)} rows`}
+                </td>
+                <td className={`${tdNumeric} border-b-0 text-text-primary font-medium`}>
+                  {formatDistance(metersToKm(totals.distance), 0)} km
+                </td>
+                <td className={`${tdNumeric} border-b-0 text-text-primary font-medium`}>
+                  {formatDuration(totals.movingTime)}
+                </td>
+                <td className={`${tdNumeric} border-b-0 text-text-primary font-medium ${SECONDARY_COLUMN}`}>
+                  {formatElevation(totals.elevation)} m
+                </td>
+                <td className={`${tdClass} border-b-0 ${SECONDARY_COLUMN}`} colSpan={2} />
+                <td className={`${tdClass} border-b-0`} colSpan={2} />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
-      <Pagination
-        page={page}
-        pageSize={ACTIVITIES_PAGE_SIZE}
-        total={listItems.length}
-        onPageChange={setPage}
-      />
+      <Pagination page={page} pageSize={pageSize} total={listItems.length} onPageChange={setPage} />
 
       {/* Sticky confirm group button */}
       {groupMode && (
@@ -743,7 +872,7 @@ function ActivityRow({
         navigate({ to: '/activities/$activityId', params: { activityId: String(activity.id) } })
       }}
     >
-      <td className={tdClass}>
+      <td className={`${tdClass} px-3`}>
         {onToggleSelect ? (
           <input
             type="checkbox"
@@ -758,7 +887,7 @@ function ActivityRow({
         ) : null}
       </td>
       <td className={`${tdClass} whitespace-nowrap`}>{formatDateFull(activity.start_date_local)}</td>
-      <td className={`${tdClass} font-semibold max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap`}>
+      <td className={`${tdClass} font-semibold max-w-0 overflow-hidden text-ellipsis whitespace-nowrap`}>
         <Link
           to="/activities/$activityId"
           params={{ activityId: String(activity.id) }}
@@ -776,11 +905,11 @@ function ActivityRow({
       </td>
       <td className={tdNumeric}>{formatDistance(metersToKm(activity.distance))} km</td>
       <td className={tdNumeric}>{formatDuration(activity.moving_time)}</td>
-      <td className={tdNumeric}>{formatElevation(activity.total_elevation_gain)} m</td>
-      <td className={tdNumeric}>
+      <td className={`${tdNumeric} ${SECONDARY_COLUMN}`}>{formatElevation(activity.total_elevation_gain)} m</td>
+      <td className={`${tdNumeric} ${SECONDARY_COLUMN}`}>
         {activity.average_watts ? `${formatNumber(activity.average_watts)} W` : '–'}
       </td>
-      <td className={tdNumeric}>
+      <td className={`${tdNumeric} ${SECONDARY_COLUMN}`}>
         {activity.average_heartrate ? `${formatNumber(activity.average_heartrate)} bpm` : '–'}
       </td>
       <td className={tdClass}>
@@ -827,21 +956,24 @@ function CategoryToggle({
       aria-label={`${name} is a ${isTraining ? 'training' : 'performance'} activity — click to change`}
       onClick={onToggle}
       title={isTraining ? 'Mark as performance activity' : 'Mark as training activity'}
-      className="inline-flex items-center gap-1 p-0.5 rounded-full bg-bg-tertiary border border-border cursor-pointer transition-colors duration-150 hover:border-text-muted"
+      className="inline-flex items-center p-px rounded-[var(--radius-sm)] bg-bg-tertiary border border-border cursor-pointer transition-colors duration-150 hover:border-text-muted"
     >
+      {/* Both states stay visible so the control reads as a switch rather than
+          a badge — abbreviated, because the column is 136px wide and a spilling
+          control is worse than a shortened word. */}
       <span
-        className={`px-2.5 py-0.5 rounded-full text-[0.75rem] font-semibold transition-colors ${
+        className={`px-2 py-0.5 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold transition-colors ${
           isTraining ? 'bg-warning/20 text-warning' : 'text-text-muted'
         }`}
       >
         Training
       </span>
       <span
-        className={`px-2.5 py-0.5 rounded-full text-[0.75rem] font-semibold transition-colors ${
+        className={`px-2 py-0.5 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold transition-colors ${
           isTraining ? 'text-text-muted' : 'bg-accent/20 text-accent'
         }`}
       >
-        Performance
+        Perf
       </span>
     </button>
   )
@@ -1072,7 +1204,7 @@ function GroupRow({
             )}
           </span>
         </td>
-        <td className={`${tdClass} font-semibold max-w-[220px] max-md:max-w-[140px]`}>
+        <td className={`${tdClass} font-semibold max-w-0 overflow-hidden`}>
           <div className="flex items-center gap-2">
             {isEditing ? (
               <input
@@ -1083,14 +1215,14 @@ function GroupRow({
                 onBlur={onFinishRename}
                 autoFocus
                 onClick={(e) => e.stopPropagation()}
-                className="bg-bg-tertiary border border-accent text-text-primary py-0.5 px-2 rounded text-sm w-full focus:outline-none"
+                className="bg-bg-tertiary border border-accent text-text-primary py-0.5 px-2 rounded-[var(--radius-sm)] text-sm w-full focus:outline-none"
               />
             ) : (
               <>
                 <span className="bg-linear-to-r from-accent to-accent-light bg-clip-text text-transparent font-bold">
                   {item.group.name}
                 </span>
-                <span className="text-[0.75rem] text-text-muted bg-bg-tertiary py-0.5 px-1.5 rounded-full">
+                <span className="text-[0.75rem] text-text-muted bg-bg-tertiary py-0.5 px-1.5 rounded-[var(--radius-sm)]">
                   {item.activities.length}
                 </span>
               </>
@@ -1108,11 +1240,11 @@ function GroupRow({
         </td>
         <td className={`${tdNumeric} font-medium`}>{formatDistance(metersToKm(item.distance))} km</td>
         <td className={`${tdNumeric} font-medium`}>{formatDuration(item.movingTime)}</td>
-        <td className={`${tdNumeric} font-medium`}>{formatElevation(item.elevation)} m</td>
-        <td className={`${tdNumeric} font-medium`}>
+        <td className={`${tdNumeric} font-medium ${SECONDARY_COLUMN}`}>{formatElevation(item.elevation)} m</td>
+        <td className={`${tdNumeric} font-medium ${SECONDARY_COLUMN}`}>
           {item.avgWatts ? `${formatNumber(item.avgWatts)} W` : '–'}
         </td>
-        <td className={`${tdNumeric} font-medium`}>
+        <td className={`${tdNumeric} font-medium ${SECONDARY_COLUMN}`}>
           {item.avgHR ? `${formatNumber(item.avgHR)} bpm` : '–'}
         </td>
         <td className={`${tdClass} font-medium`}>
@@ -1129,14 +1261,14 @@ function GroupRow({
           {groupMode ? (
             <div className="flex items-center gap-1">
               <button
-                className="py-1 px-2 rounded text-[0.75rem] font-medium cursor-pointer bg-bg-tertiary border border-border text-text-muted hover:text-text-primary hover:border-text-muted transition-all duration-150"
+                className="py-1 px-2 rounded-[var(--radius-sm)] text-[0.75rem] font-medium cursor-pointer bg-bg-tertiary border border-border text-text-muted hover:text-text-primary hover:border-text-muted transition-all duration-150"
                 onClick={onStartRename}
                 title="Rename group"
               >
                 Rename
               </button>
               <button
-                className="py-1 px-2 rounded text-[0.75rem] font-medium cursor-pointer bg-danger/10 border border-danger/20 text-danger hover:bg-danger/20 hover:border-danger/40 transition-all duration-150"
+                className="py-1 px-2 rounded-[var(--radius-sm)] text-[0.75rem] font-medium cursor-pointer bg-danger/10 border border-danger/20 text-danger hover:bg-danger/20 hover:border-danger/40 transition-all duration-150"
                 onClick={onDelete}
                 title="Ungroup activities"
               >
