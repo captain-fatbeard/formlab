@@ -15,6 +15,7 @@ import { fitnessSeries } from '~/lib/fitness'
 import { useDashboard } from '~/lib/dashboard-context'
 import { chartTheme, tooltipStyle, formatDateShort, formatDateFull } from '~/lib/chart-theme'
 import { RangeSelector } from './RangeSelector'
+import { cardTitle } from '~/lib/styles'
 
 interface FitnessChartProps {
   activities: StravaActivity[]
@@ -51,7 +52,7 @@ export function FitnessChart({ activities }: FitnessChartProps) {
   if (fitnessData.length === 0) {
     return (
       <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-        <h3 className="text-lg font-semibold mb-5 text-text-primary max-[480px]:text-base">Fitness & Form</h3>
+        <h3 className={`${cardTitle} mb-5`}>Fitness &amp; form</h3>
         <div className="text-text-muted text-center py-16 text-[0.9rem]">
           Need activities with power or heart rate to calculate fitness trends.
         </div>
@@ -79,29 +80,29 @@ export function FitnessChart({ activities }: FitnessChartProps) {
     <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
       <div className="flex justify-between items-center mb-5 max-md:flex-col max-md:items-start max-md:gap-3">
         <div className="flex items-center gap-4">
-          <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">Fitness & Form</h3>
+          <h3 className={cardTitle}>Fitness &amp; form</h3>
           <RangeSelector days={days} onChange={setDays} />
         </div>
         <div className="flex gap-8 flex-wrap max-md:gap-4">
           <span className="flex flex-col items-center">
-            <span className="text-[0.65rem] text-text-muted uppercase font-semibold tracking-wider">CTL</span>
+            <span className="text-[0.75rem] text-text-muted uppercase font-semibold tracking-wider">CTL</span>
             <span className="data-value text-2xl font-medium" style={{ color: chartTheme.colors.primary.main }}>{latestData.ctl.toFixed(1)}</span>
             <span className="text-[0.625rem] font-medium mt-0.5 rounded-full px-2 py-0.5" style={{ color: ctlLevel.color, backgroundColor: `${ctlLevel.color}15` }}>{ctlLevel.label}</span>
           </span>
           <span className="flex flex-col items-center">
-            <span className="text-[0.65rem] text-text-muted uppercase font-semibold tracking-wider">ATL</span>
+            <span className="text-[0.75rem] text-text-muted uppercase font-semibold tracking-wider">ATL</span>
             <span className="data-value text-2xl font-medium" style={{ color: chartTheme.colors.secondary.main }}>{latestData.atl.toFixed(1)}</span>
             <span className="text-[0.625rem] font-medium mt-0.5 rounded-full px-2 py-0.5" style={{ color: atlLevel.color, backgroundColor: `${atlLevel.color}15` }}>{atlLevel.label}</span>
           </span>
           <span className="flex flex-col items-center">
-            <span className="text-[0.65rem] text-text-muted uppercase font-semibold tracking-wider">Form</span>
+            <span className="text-[0.75rem] text-text-muted uppercase font-semibold tracking-wider">Form</span>
             <span className="data-value text-2xl font-medium" style={{ color: formStatus.color }}>
               {latestData.tsb.toFixed(1)}
             </span>
             <span className="text-[0.625rem] font-medium mt-0.5 rounded-full px-2 py-0.5" style={{ color: formStatus.color, backgroundColor: `${formStatus.color}15` }}>{formStatus.label}</span>
           </span>
           <span className="flex flex-col items-center">
-            <span className="text-[0.65rem] text-text-muted uppercase font-semibold tracking-wider">FTP</span>
+            <span className="text-[0.75rem] text-text-muted uppercase font-semibold tracking-wider">FTP</span>
             <span className="data-value text-2xl font-medium text-text-primary">{latestData.ftp}W</span>
             <span className="text-[0.625rem] font-medium mt-0.5 rounded-full px-2 py-0.5 text-text-muted bg-bg-tertiary">Estimated</span>
           </span>
@@ -247,11 +248,11 @@ function CTLTargets({ currentCtl }: { currentCtl: number }) {
       <table className="w-full text-sm">
         <thead>
           <tr>
-            <th className="text-left p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">Target CTL</th>
-            <th className="text-left p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">Tier</th>
-            <th className="text-right p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">TSS / day</th>
-            <th className="text-right p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">TSS / week</th>
-            <th className="text-right p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">vs you</th>
+            <th className="text-left p-3 text-text-muted font-semibold text-[0.75rem] uppercase tracking-wide border-b border-border">Target CTL</th>
+            <th className="text-left p-3 text-text-muted font-semibold text-[0.75rem] uppercase tracking-wide border-b border-border">Tier</th>
+            <th className="text-right p-3 text-text-muted font-semibold text-[0.75rem] uppercase tracking-wide border-b border-border">TSS / day</th>
+            <th className="text-right p-3 text-text-muted font-semibold text-[0.75rem] uppercase tracking-wide border-b border-border">TSS / week</th>
+            <th className="text-right p-3 text-text-muted font-semibold text-[0.75rem] uppercase tracking-wide border-b border-border">vs you</th>
           </tr>
         </thead>
         <tbody>

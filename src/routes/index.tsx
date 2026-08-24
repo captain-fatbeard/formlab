@@ -93,24 +93,43 @@ function Home() {
           </p>
         </div>
         <form onSubmit={handleSubmit} className="flex flex-col items-center gap-4 w-full max-w-[320px]">
+          {/* A visually-hidden label rather than a placeholder alone, and an
+              autocomplete hint so the browser stops guessing. */}
+          <label htmlFor="passphrase" className="sr-only">
+            Passphrase
+          </label>
           <input
+            id="passphrase"
+            name="passphrase"
             type="password"
+            autoComplete="current-password"
             value={passphrase}
             onChange={(e) => setPassphrase(e.target.value)}
             placeholder="Passphrase"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'passphrase-error' : undefined}
             autoFocus
             className="w-full py-3.5 px-5 bg-bg-secondary/80 border border-border-subtle rounded-[var(--radius-md)] text-text-primary text-center text-base placeholder:text-text-muted focus:outline-none focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(20,184,166,0.15)] transition-all"
           />
           <button
             type="submit"
             disabled={!passphrase.trim() || isSubmitting}
-            className="group relative flex items-center justify-center gap-3 w-full bg-linear-to-br from-accent to-accent-dark text-white border border-accent/30 py-3.5 px-10 text-base font-semibold rounded-[var(--radius-md)] cursor-pointer transition-all duration-300 shadow-[0_4px_16px_rgba(20,184,166,0.25)] hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(20,184,166,0.35)] active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+            className="group relative flex items-center justify-center gap-3 w-full bg-accent text-bg-primary border border-accent py-3.5 px-10 text-base font-semibold rounded-[var(--radius-md)] cursor-pointer transition-all duration-300 shadow-[0_4px_16px_rgba(20,184,166,0.25)] hover:bg-accent-light hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(20,184,166,0.35)] active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
           >
-            {isSubmitting ? 'Unlocking...' : 'Unlock'}
+            {isSubmitting ? 'Unlocking…' : 'Unlock'}
           </button>
-          {error && (
-            <p className="text-danger text-sm bg-danger-muted px-4 py-2 rounded-[var(--radius-sm)]">{error}</p>
-          )}
+          {/* Fixed-height slot: the form used to shift down when the error
+              appeared, which moves the button under the pointer mid-click. */}
+          <div className="min-h-[2.5rem] w-full flex items-start justify-center" aria-live="polite">
+            {error && (
+              <p
+                id="passphrase-error"
+                className="text-danger text-sm bg-danger-muted px-4 py-2 rounded-[var(--radius-sm)]"
+              >
+                {error}
+              </p>
+            )}
+          </div>
         </form>
         <p className="text-text-muted text-xs tracking-wide mt-2">
           Training data synced from Garmin via intervals.icu

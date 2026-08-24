@@ -20,7 +20,7 @@ export function ComparisonBar({ value, benchmark, goodThreshold, unit, label }: 
   return (
     <div className="mt-3 pt-3 border-t border-border-subtle">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[0.65rem] text-text-muted uppercase font-semibold tracking-wide">vs {label}</span>
+        <span className="text-[0.75rem] text-text-muted uppercase font-semibold tracking-wide">vs {label}</span>
         <span className={`text-xs font-bold ${isAbove ? 'text-success' : 'text-warning'}`}>
           {isAbove ? '+' : ''}{diffPercent}%
         </span>
@@ -37,8 +37,8 @@ export function ComparisonBar({ value, benchmark, goodThreshold, unit, label }: 
         />
       </div>
       <div className="flex justify-between mt-1.5">
-        <span className="text-[0.6rem] text-text-muted">Avg: {benchmark} {unit}</span>
-        <span className="text-[0.6rem] text-text-muted">Good: {goodThreshold}</span>
+        <span className="text-[0.75rem] text-text-muted">Avg: {benchmark} {unit}</span>
+        <span className="text-[0.75rem] text-text-muted">Good: {goodThreshold}</span>
       </div>
     </div>
   )

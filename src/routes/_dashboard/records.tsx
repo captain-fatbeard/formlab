@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useDashboard } from '~/lib/dashboard-context'
 import { useEffect, useMemo, useState } from 'react'
 import { calculatePersonalRecords } from '~/lib/performance'
-import { formatDateFull, chartTheme, tooltipStyle } from '~/lib/chart-theme'
+import { chartTheme, tooltipStyle } from '~/lib/chart-theme'
 import {
   fetchAllCachedSegmentData,
   fetchCachedBestEfforts,
@@ -22,30 +22,26 @@ import {
 } from 'recharts'
 import { Pagination } from '~/components/Pagination'
 import { isRide } from '~/lib/tss'
+import { isPlausibleEffort, isImperialEffort } from '~/lib/best-efforts'
+import { normalizeSegmentName, splitActivityPrefix } from '~/lib/segment-names'
+import { PageHeader } from '~/components/PageHeader'
+import { sectionHeading } from '~/lib/styles'
+import {
+  formatNumber,
+  formatDistance,
+  formatClock,
+  formatPacePerKm,
+  formatDateFull,
+} from '~/lib/format'
 
-const SEGMENTS_PAGE_SIZE = 10
+// Ten rows over 954 segments is 96 pages of tall cards. The search box and the
+// sort chips carry the load now, so the page can afford denser rows.
+const SEGMENTS_PAGE_SIZE = 25
 
 export const Route = createFileRoute('/_dashboard/records')({
+  head: () => ({ meta: [{ title: 'Records · FormLab' }] }),
   component: RecordsPage,
 })
-
-// Format seconds to mm:ss
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
-
-// Format seconds to h:mm:ss
-function formatTimeLong(seconds: number): string {
-  const hours = Math.floor(seconds / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  const secs = seconds % 60
-  if (hours > 0) {
-    return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
 
 // Group segment efforts by segment ID and compute stats
 interface SegmentSummary {
@@ -166,6 +162,10 @@ function groupBestEfforts(efforts: BestEffortWithActivity[]): BestEffortSummary[
   const grouped = new Map<string, BestEffortWithActivity[]>()
 
   for (const effort of efforts) {
+    // A 5K in 5:48 is a bad row, not a world record — and taking the minimum
+    // time in each bucket meant one bad row won the bucket outright. See
+    // lib/best-efforts.
+    if (!isPlausibleEffort(effort.distance, effort.moving_time)) continue
     if (!grouped.has(effort.name)) grouped.set(effort.name, [])
     grouped.get(effort.name)!.push(effort)
   }
@@ -173,6 +173,7 @@ function groupBestEfforts(efforts: BestEffortWithActivity[]): BestEffortSummary[
   const summaries: BestEffortSummary[] = []
 
   for (const [name, effortGroup] of grouped) {
+    if (effortGroup.length === 0) continue
     const sorted = [...effortGroup].sort((a, b) => a.moving_time - b.moving_time)
     const best = sorted[0]
 
@@ -221,7 +222,7 @@ function AchievementBadge({ type, rank }: { type: string; rank: number }) {
     : 'bg-teal-500/20 text-teal-400 border-teal-500/30'
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider rounded-full border ${colorClass}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[0.75rem] font-bold uppercase tracking-wider rounded-full border ${colorClass}`}>
       {isKom && rank === 1 && (
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
           <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
@@ -240,7 +241,7 @@ function climbCategoryLabel(cat: number): string {
 }
 
 function RecordsPage() {
-  const { activities, filteredActivities, athlete } = useDashboard()
+  const { activities, athlete } = useDashboard()
   const [segmentEfforts, setSegmentEfforts] = useState<SegmentEffortWithActivity[]>([])
   const [bestEfforts, setBestEfforts] = useState<BestEffortWithActivity[]>([])
   const [powerCurves, setPowerCurves] = useState<PowerCurveWithActivity[]>([])
@@ -252,6 +253,7 @@ function RecordsPage() {
   const [segmentFilter, setSegmentFilter] = useState<'all' | 'irl' | 'zwift'>('all')
   const [segmentSearch, setSegmentSearch] = useState('')
   const [segmentPage, setSegmentPage] = useState(1)
+  const [showImperialEfforts, setShowImperialEfforts] = useState(false)
 
   // Personal records from all activities (not filtered by time range)
   const personalRecords = useMemo(() => calculatePersonalRecords(activities), [activities])
@@ -371,20 +373,35 @@ function RecordsPage() {
   )
 
   // Group best efforts
-  const bestEffortSummaries = useMemo(() => groupBestEfforts(bestEfforts), [bestEfforts])
+  const allBestEffortSummaries = useMemo(() => groupBestEfforts(bestEfforts), [bestEfforts])
+  const hasImperialEfforts = allBestEffortSummaries.some((e) => isImperialEffort(e.name))
+  const bestEffortSummaries = useMemo(
+    () =>
+      showImperialEfforts
+        ? allBestEffortSummaries
+        : allBestEffortSummaries.filter((e) => !isImperialEffort(e.name)),
+    [allBestEffortSummaries, showImperialEfforts]
+  )
 
   return (
     <div>
+      <div className="mb-8">
+        <PageHeader
+          title="Records"
+          description="Your bests: single-ride records, peak power, running efforts and the segments you ride most."
+          scope="lifetime"
+          count={activities.length}
+        />
+      </div>
+
       {/* Personal Records Section */}
       <section className="mb-12">
-        <h2 className="text-xl font-bold mb-6 bg-linear-to-br from-accent-light to-accent bg-clip-text text-transparent">
-          Personal Records
-        </h2>
+        <h2 className={`${sectionHeading} mb-6`}>Personal records</h2>
 
         {personalRecords.length === 0 ? (
           <p className="text-text-muted text-sm">No records yet. Keep riding!</p>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-5 max-md:grid-cols-2 max-md:gap-3 max-[480px]:gap-2">
+          <div className="grid grid-cols-4 gap-5 max-lg:grid-cols-3 max-md:grid-cols-2 max-md:gap-3 max-[480px]:gap-2">
             {personalRecords.map((record, index) => (
               <Link
                 key={index}
@@ -392,7 +409,7 @@ function RecordsPage() {
                 params={{ activityId: String(record.activity.id) }}
                 className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-6 text-center transition-all duration-200 min-w-0 overflow-hidden hover:border-accent/50 hover:-translate-y-0.5 hover:shadow-md max-[480px]:p-3.5 no-underline block"
               >
-                <div className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold mb-3 max-[480px]:text-[0.6rem] max-[480px]:mb-2">
+                <div className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold mb-3 max-[480px]:mb-2">
                   {record.type}
                 </div>
                 <div className="text-4xl font-bold bg-linear-to-br from-accent-light to-accent bg-clip-text text-transparent leading-tight break-words max-md:text-[1.75rem] max-[480px]:text-[1.375rem]">
@@ -403,10 +420,13 @@ function RecordsPage() {
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-text-primary mt-3 overflow-hidden text-ellipsis whitespace-nowrap font-medium min-w-0 max-[480px]:text-xs">
+                <div
+                  className="text-sm text-text-primary mt-3 overflow-hidden text-ellipsis whitespace-nowrap font-medium min-w-0"
+                  title={record.activity.name}
+                >
                   {record.activity.name}
                 </div>
-                <div className="text-xs text-text-muted mt-1">
+                <div className="text-[0.75rem] text-text-muted mt-1">
                   {formatDateFull(record.date)}
                 </div>
               </Link>
@@ -418,20 +438,18 @@ function RecordsPage() {
       {/* Power Records Section */}
       {powerRecords.some((p) => p.top3.length > 0) && (
         <section className="mb-12">
-          <h2 className="text-xl font-bold mb-6 bg-linear-to-br from-info to-accent-secondary bg-clip-text text-transparent">
-            Power Records
-          </h2>
+          <h2 className={`${sectionHeading} mb-6`}>Power records</h2>
 
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-4 max-md:grid-cols-1">
+          <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
             {powerRecords.map(({ label, top3, estimated }) => {
               if (top3.length === 0) return null
               return (
                 <div key={label} className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-5 max-[480px]:p-4">
-                  <div className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold mb-4 flex items-center gap-2">
-                    Best {label} Power
+                  <div className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold mb-4 flex items-center gap-2">
+                    Best {label} power
                     {estimated && (
                       <span
-                        className="text-[0.6rem] normal-case tracking-normal font-medium text-text-muted bg-bg-tertiary rounded-full px-2 py-0.5"
+                        className="text-[0.75rem] normal-case tracking-normal font-medium text-text-muted bg-bg-tertiary rounded-full px-2 py-0.5"
                         title="Estimated from whole-ride average power. Sync All Activities to compute true peaks from power streams."
                       >
                         est.
@@ -456,19 +474,35 @@ function RecordsPage() {
                           {i + 1}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-text-secondary group-hover:text-text-primary transition-colors truncate">
-                            {activity.name}
-                          </div>
-                          <div className="text-xs text-text-muted">
-                            {formatDateFull(activity.start_date_local)} · {formatTimeLong(activity.moving_time)} · {(activity.distance / 1000).toFixed(1)} km
+                          {/* The shared "Zwift - " prefix used to survive
+                              truncation while the part that identifies the ride
+                              was cut. It moves to a badge instead. */}
+                          {(() => {
+                            const { prefix, rest } = splitActivityPrefix(activity.name)
+                            return (
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {prefix && (
+                                  <span className="text-[0.75rem] font-semibold text-ride bg-ride-muted rounded px-1.5 py-0.5 shrink-0">
+                                    {prefix}
+                                  </span>
+                                )}
+                                <span
+                                  className="text-sm text-text-secondary group-hover:text-text-primary transition-colors truncate"
+                                  title={activity.name}
+                                >
+                                  {rest}
+                                </span>
+                              </div>
+                            )
+                          })()}
+                          <div className="text-[0.75rem] text-text-muted data-value">
+                            {formatDateFull(activity.start_date_local)} · {formatClock(activity.moving_time)} · {formatDistance(activity.distance / 1000)} km
                           </div>
                         </div>
-                        <div className={`text-lg font-bold shrink-0 ${
-                          i === 0
-                            ? 'bg-linear-to-br from-info to-accent-secondary bg-clip-text text-transparent'
-                            : 'text-text-secondary'
+                        <div className={`data-value text-lg font-medium shrink-0 ${
+                          i === 0 ? 'text-accent' : 'text-text-secondary'
                         }`}>
-                          {activity.watts}<span className="text-xs font-medium ml-0.5">W</span>
+                          {formatNumber(activity.watts)}<span className="text-xs font-medium ml-0.5">W</span>
                         </div>
                       </Link>
                     ))}
@@ -481,28 +515,53 @@ function RecordsPage() {
       )}
 
       {/* Best Efforts Section (Running) */}
+      {isLoadingEfforts && bestEffortSummaries.length === 0 && (
+        <section className="mb-12">
+          <h2 className={`${sectionHeading} mb-6`}>Best efforts</h2>
+          <div className="text-text-muted text-sm py-8 text-center">Loading running efforts…</div>
+        </section>
+      )}
       {bestEffortSummaries.length > 0 && (
         <section className="mb-12">
-          <h2 className="text-xl font-bold mb-6 bg-linear-to-br from-run to-success bg-clip-text text-transparent">
-            Best Efforts
-          </h2>
+          <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+            <h2 className={sectionHeading}>Best efforts</h2>
+            {/* Metric by default: 400 m, ½ mile, 1 mile, 2 mile and 5K
+                interleaved is two unit systems in one row, for a rider whose
+                every other figure is metric. */}
+            {hasImperialEfforts && (
+              <label className="flex items-center gap-2 text-[0.75rem] text-text-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showImperialEfforts}
+                  onChange={(e) => setShowImperialEfforts(e.target.checked)}
+                  className="size-3.5 accent-accent cursor-pointer"
+                />
+                Show mile distances
+              </label>
+            )}
+          </div>
 
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-4 max-md:grid-cols-2 max-md:gap-3">
+          <div className="grid grid-cols-4 gap-4 max-lg:grid-cols-3 max-md:grid-cols-2 max-md:gap-3">
             {bestEffortSummaries.map((effort) => (
               <div key={effort.name} className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] overflow-hidden">
                 <button
                   onClick={() => setExpandedEffort(expandedEffort === effort.name ? null : effort.name)}
                   className="w-full p-5 text-left cursor-pointer bg-transparent border-none transition-colors hover:bg-bg-tertiary max-[480px]:p-3.5"
                 >
-                  <div className="text-[0.65rem] text-text-muted uppercase tracking-wider font-semibold mb-2">
+                  <div className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold mb-2">
                     {effort.name}
                   </div>
-                  <div className="text-2xl font-bold text-text-primary max-[480px]:text-xl">
-                    {formatTimeLong(effort.bestTime)}
+                  <div className="data-value text-2xl font-medium text-text-primary max-[480px]:text-xl">
+                    {formatClock(effort.bestTime)}
+                  </div>
+                  {/* The pace is what makes the row checkable: a bucket whose
+                      pace does not match its neighbours is a bad row. */}
+                  <div className="text-[0.75rem] text-text-secondary data-value mt-1">
+                    {formatPacePerKm((effort.bestTime / effort.distance) * 1000)}
                   </div>
                   <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-text-muted">{formatDateFull(effort.bestDate)}</span>
-                    <span className="text-xs text-text-muted">{effort.effortCount}x</span>
+                    <span className="text-[0.75rem] text-text-muted">{formatDateFull(effort.bestDate)}</span>
+                    <span className="text-[0.75rem] text-text-muted">{effort.effortCount}×</span>
                   </div>
                 </button>
 
@@ -515,19 +574,19 @@ function RecordsPage() {
                           <XAxis
                             dataKey="date"
                             tickFormatter={(d: string) => formatDateFull(d)}
-                            tick={{ fill: chartTheme.axis, fontSize: 10 }}
+                            tick={{ fill: chartTheme.axis, fontSize: 11 }}
                             stroke={chartTheme.grid}
                           />
                           <YAxis
-                            tickFormatter={(v: number) => formatTimeLong(v)}
-                            tick={{ fill: chartTheme.axis, fontSize: 10 }}
+                            tickFormatter={(v: number) => formatClock(v)}
+                            tick={{ fill: chartTheme.axis, fontSize: 11 }}
                             stroke={chartTheme.grid}
                             domain={['dataMin - 10', 'dataMax + 10']}
                             reversed
                           />
                           <Tooltip
                             {...tooltipStyle}
-                            formatter={(value: number) => [formatTimeLong(value), 'Time']}
+                            formatter={(value: number) => [formatClock(value), 'Time']}
                             labelFormatter={(label: string) => formatDateFull(label)}
                           />
                           <Line
@@ -551,9 +610,7 @@ function RecordsPage() {
       {/* Segments Section */}
       <section>
         <div className="flex items-center justify-between mb-6 max-md:flex-col max-md:items-start max-md:gap-3">
-          <h2 className="text-xl font-bold bg-linear-to-br from-moderate to-[#6366f1] bg-clip-text text-transparent">
-            Popular Segments
-          </h2>
+          <h2 className={sectionHeading}>Popular segments</h2>
           <div className="flex items-center justify-end gap-4 flex-wrap max-md:w-full max-md:justify-start max-[480px]:flex-col max-[480px]:items-stretch max-[480px]:gap-2">
             <div className="relative w-[220px] max-[480px]:w-full">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -583,8 +640,10 @@ function RecordsPage() {
               {(['all', 'irl', 'zwift'] as const).map((filter) => (
                 <button
                   key={filter}
+                  type="button"
                   onClick={() => setSegmentFilter(filter)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-all cursor-pointer border-none ${
+                  aria-pressed={segmentFilter === filter}
+                  className={`px-3 py-1.5 text-[0.75rem] font-medium rounded-[var(--radius-sm)] transition-all cursor-pointer border-none ${
                     segmentFilter === filter
                       ? 'bg-accent/20 text-accent'
                       : 'bg-transparent text-text-muted hover:text-text-secondary'
@@ -594,18 +653,20 @@ function RecordsPage() {
                 </button>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {(['count', 'time', 'grade'] as const).map((sort) => (
                 <button
                   key={sort}
+                  type="button"
                   onClick={() => setSegmentSort(sort)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] border transition-all cursor-pointer ${
+                  aria-pressed={segmentSort === sort}
+                  className={`px-3 py-1.5 text-[0.75rem] font-medium rounded-[var(--radius-sm)] border transition-all cursor-pointer whitespace-nowrap ${
                     segmentSort === sort
                       ? 'bg-accent/20 text-accent border-accent/30'
                       : 'bg-bg-secondary text-text-muted border-border-subtle hover:text-text-secondary hover:border-border'
                   }`}
                 >
-                  {sort === 'count' ? 'Most Ridden' : sort === 'time' ? 'Best Time' : 'Steepest'}
+                  {sort === 'count' ? 'Most ridden' : sort === 'time' ? 'Best time' : 'Steepest'}
                 </button>
               ))}
             </div>
@@ -621,64 +682,68 @@ function RecordsPage() {
               : 'No segment data yet. Ride more routes to build your segment history!'}
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
             {pagedSegments.map((seg) => (
               <div
                 key={seg.segmentId}
-                className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] overflow-hidden transition-all duration-200 hover:border-border"
+                className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-md)] overflow-hidden transition-all duration-200 hover:border-border"
               >
                 <button
+                  type="button"
+                  aria-expanded={expandedSegment === seg.segmentId}
                   onClick={() => setExpandedSegment(expandedSegment === seg.segmentId ? null : seg.segmentId)}
-                  className="w-full p-5 text-left cursor-pointer bg-transparent border-none transition-colors hover:bg-bg-tertiary max-[480px]:p-3.5"
+                  className="w-full py-3 px-4 text-left cursor-pointer bg-transparent border-none transition-colors hover:bg-bg-tertiary"
                 >
                   <div className="flex items-start justify-between gap-4 max-[480px]:flex-col max-[480px]:gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-sm font-semibold text-text-primary truncate">
-                          {seg.name}
+                        {/* Strava hands these over in caps often as not, and a
+                            list where half the rows shout is unreadable. */}
+                        <h3 className="text-sm font-semibold text-text-primary truncate" title={seg.name}>
+                          {normalizeSegmentName(seg.name)}
                         </h3>
                         {seg.achievements.map((a, i) => (
                           <AchievementBadge key={i} type={a.type} rank={a.rank} />
                         ))}
                         {seg.climbCategory > 0 && (
-                          <span className="text-[0.6rem] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">
+                          <span className="text-[0.75rem] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">
                             {climbCategoryLabel(seg.climbCategory)}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-text-muted flex-wrap">
-                        <span>{(seg.distance / 1000).toFixed(2)} km</span>
-                        <span>{seg.averageGrade.toFixed(1)}% avg</span>
-                        <span>{Math.round(seg.elevationHigh - seg.elevationLow)} m elev</span>
-                        <span>{seg.effortCount} {seg.effortCount === 1 ? 'effort' : 'efforts'}</span>
+                      <div className="flex items-center gap-4 mt-1.5 text-[0.75rem] text-text-muted flex-wrap data-value">
+                        <span>{formatDistance(seg.distance / 1000, 2)} km</span>
+                        <span>{formatNumber(seg.averageGrade, 1)}% avg</span>
+                        <span>{formatNumber(seg.elevationHigh - seg.elevationLow)} m elev</span>
+                        <span>{formatNumber(seg.effortCount)} {seg.effortCount === 1 ? 'effort' : 'efforts'}</span>
                       </div>
                     </div>
                     <div className="text-right shrink-0 max-[480px]:flex max-[480px]:gap-4 max-[480px]:text-left">
-                      <div className="text-lg font-bold text-text-primary max-[480px]:text-base">
-                        {formatTimeLong(seg.bestTime)}
+                      <div className="data-value text-lg font-medium text-text-primary max-[480px]:text-base">
+                        {formatClock(seg.bestTime)}
                       </div>
-                      <div className="text-xs text-text-muted mt-0.5">
+                      <div className="text-[0.75rem] text-text-muted mt-0.5">
                         {formatDateFull(seg.bestDate)}
                       </div>
                     </div>
                   </div>
 
                   {/* Stats row */}
-                  <div className="flex gap-6 mt-3 text-xs flex-wrap">
+                  <div className="flex gap-6 mt-2 text-[0.75rem] flex-wrap">
                     <div>
                       <span className="text-text-muted">Avg time </span>
-                      <span className="text-text-secondary font-medium">{formatTimeLong(seg.averageTime)}</span>
+                      <span className="text-text-secondary font-medium data-value">{formatClock(seg.averageTime)}</span>
                     </div>
                     {seg.bestWatts && (
                       <div>
                         <span className="text-text-muted">Best power </span>
-                        <span className="text-text-secondary font-medium">{seg.bestWatts}W</span>
+                        <span className="text-text-secondary font-medium data-value">{formatNumber(seg.bestWatts)} W</span>
                       </div>
                     )}
                     {seg.bestHR && (
                       <div>
                         <span className="text-text-muted">Max HR </span>
-                        <span className="text-text-secondary font-medium">{Math.round(seg.bestHR)} bpm</span>
+                        <span className="text-text-secondary font-medium data-value">{formatNumber(seg.bestHR)} bpm</span>
                       </div>
                     )}
                   </div>
@@ -697,19 +762,19 @@ function RecordsPage() {
                           <XAxis
                             dataKey="date"
                             tickFormatter={(d: string) => formatDateFull(d)}
-                            tick={{ fill: chartTheme.axis, fontSize: 10 }}
+                            tick={{ fill: chartTheme.axis, fontSize: 11 }}
                             stroke={chartTheme.grid}
                           />
                           <YAxis
-                            tickFormatter={(v: number) => formatTimeLong(v)}
-                            tick={{ fill: chartTheme.axis, fontSize: 10 }}
+                            tickFormatter={(v: number) => formatClock(v)}
+                            tick={{ fill: chartTheme.axis, fontSize: 11 }}
                             stroke={chartTheme.grid}
                             domain={['dataMin - 10', 'dataMax + 10']}
                             reversed
                           />
                           <Tooltip
                             {...tooltipStyle}
-                            formatter={(value: number) => [formatTimeLong(value), 'Time']}
+                            formatter={(value: number) => [formatClock(value), 'Time']}
                             labelFormatter={(label: string) => formatDateFull(label)}
                           />
                           <Line
@@ -747,7 +812,7 @@ function RecordsPage() {
                                 <td className="py-1.5">{formatDateFull(effort.date)}</td>
                                 <td className="py-1.5 max-w-[200px] truncate">{effort.activityName}</td>
                                 <td className="py-1.5 text-right font-medium">
-                                  {formatTimeLong(effort.time)}
+                                  {formatClock(effort.time)}
                                   {isBest && <span className="ml-1 text-accent">★</span>}
                                 </td>
                                 {seg.bestWatts && (

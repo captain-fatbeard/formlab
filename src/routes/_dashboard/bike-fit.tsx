@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard/bike-fit')({
+  head: () => ({ meta: [{ title: 'Bike Fit · FormLab' }] }),
   component: BikeFitPage,
 })
 

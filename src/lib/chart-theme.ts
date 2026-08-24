@@ -127,19 +127,12 @@ export const hrZoneColors = [
   '#f87171', // Z5 - Maximum (red)
 ]
 
-// Danish date formatters for charts
-import { format } from 'date-fns'
-import { da } from 'date-fns/locale'
+// Dates come from lib/format so charts, tables and headers can never disagree
+// about what language or order a date renders in. Re-exported here because
+// most chart code already imports from this module.
+import { formatDateShort, formatDateFull } from './format'
 
-export function formatDateShort(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return format(d, 'd. MMM', { locale: da })
-}
-
-export function formatDateFull(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return format(d, 'd. MMM yyyy', { locale: da })
-}
+export { formatDateShort, formatDateFull }
 
 // Shared tooltip label formatter: shows activity name as title, date as subtitle
 // Works with any chart data that has a `name` field in the payload

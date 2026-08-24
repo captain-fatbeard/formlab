@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { type StravaActivity } from '~/lib/strava'
 import { calculateRunningMetrics, formatPace, getMotionistBenchmarks } from '~/lib/performance'
-import { badgeClasses } from '~/lib/styles'
+import { badgeClasses, cardTitle } from '~/lib/styles'
 import { ComparisonBar } from './ComparisonBar'
 import type { Gender } from '~/lib/dashboard-context'
 
@@ -18,7 +18,7 @@ export function RunningMetrics({ activities, age, gender }: RunningMetricsProps)
   if (metrics.totalRuns === 0) {
     return (
       <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-5">
-        <h3 className="text-lg font-semibold mb-6">Running Metrics</h3>
+        <h3 className={`${cardTitle} mb-6`}>Running metrics</h3>
         <p className="text-text-muted text-center py-16 text-[0.9rem]">Need running data to calculate metrics</p>
       </div>
     )
@@ -26,7 +26,7 @@ export function RunningMetrics({ activities, age, gender }: RunningMetricsProps)
 
   return (
     <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-5">
-      <h3 className="text-lg font-semibold mb-6">Running Metrics</h3>
+      <h3 className={`${cardTitle} mb-6`}>Running metrics</h3>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5 max-md:grid-cols-1">
         {/* Est. VO2max (Running) */}
@@ -42,7 +42,7 @@ export function RunningMetrics({ activities, age, gender }: RunningMetricsProps)
               <span className="text-sm text-text-secondary mt-1 font-medium">Est. VO2max (Running)</span>
               <span className="text-xs text-text-muted">ml/kg/min</span>
             </div>
-            <span className={`absolute top-4 right-4 text-[0.65rem] py-1 px-2.5 rounded-full font-bold uppercase tracking-wide ${badgeClasses[metrics.vo2maxCategory.toLowerCase().replace(' ', '-')] || ''}`}>
+            <span className={`absolute top-4 right-4 text-[0.75rem] py-1 px-2.5 rounded-full font-bold uppercase tracking-wide ${badgeClasses[metrics.vo2maxCategory.toLowerCase().replace(' ', '-')] || ''}`}>
               {metrics.vo2maxCategory}
             </span>
             <ComparisonBar

@@ -8,7 +8,7 @@ import {
   differenceInDays,
   parseISO,
 } from 'date-fns'
-import { da } from 'date-fns/locale'
+import { dateFnsLocale } from '~/lib/format'
 import {
   AreaChart,
   Area,
@@ -48,8 +48,11 @@ import {
   upsertPlanDayOverride,
   upsertPlanWeekPhase,
 } from '~/lib/storage/supabase-client'
+import { cardTitle } from '~/lib/styles'
+import { PageHeader } from '~/components/PageHeader'
 
 export const Route = createFileRoute('/_dashboard/plan')({
+  head: () => ({ meta: [{ title: 'Plan · FormLab' }] }),
   component: PlanPage,
 })
 
@@ -411,7 +414,7 @@ function PlanPage() {
       .filter((p) => p.date >= cutoff)
       .map((p) => ({
         date: p.date,
-        label: format(new Date(p.date), 'd. MMM', { locale: da }),
+        label: format(new Date(p.date), 'd MMM', { locale: dateFnsLocale }),
         ctl: Math.round(p.ctl),
         atl: Math.round(p.atl),
         tsb: Math.round(p.tsb),
@@ -442,25 +445,22 @@ function PlanPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      {/* Intro */}
-      <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4 max-[480px]:p-3.5">
-        <h2 className="text-2xl font-semibold text-text-primary mb-2 max-[480px]:text-xl">
-          Training Plan
-        </h2>
-        <p className="text-text-secondary text-sm leading-relaxed max-w-2xl">
-          Recovery-first week to bleed off accumulated fatigue, then a repeatable weekly structure
-          that adds real threshold and VO2max work without blowing up CTL.
-        </p>
-      </div>
+      {/* Intro. The plan states its own scope — it is about the weeks ahead,
+          not about the top-bar filter. */}
+      <PageHeader
+        title="Training plan"
+        description="Recovery-first week to bleed off accumulated fatigue, then a repeatable weekly structure that adds real threshold and VO2max work without blowing up CTL."
+        scope="none"
+      />
 
       {/* Progress summary */}
       <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4 max-[480px]:p-3.5">
         <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
-          <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">
+          <h3 className={cardTitle}>
             Plan Progress
           </h3>
-          <span className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold data-value">
-            Week of {format(weekStart, 'd. MMM', { locale: da })} – {format(weekEnd, 'd. MMM', { locale: da })}
+          <span className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold data-value">
+            Week of {format(weekStart, 'd MMM', { locale: dateFnsLocale })} – {format(weekEnd, 'd MMM', { locale: dateFnsLocale })}
           </span>
         </div>
 
@@ -572,15 +572,18 @@ function PlanPage() {
       {trajectoryData.length >= 3 && (
         <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4 max-[480px]:p-3.5">
           <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
-            <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">
+            <h3 className={cardTitle}>
               Recovery Trajectory
             </h3>
-            <span className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">
+            <span className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">
               14 days · fatigue bleeding off
             </span>
           </div>
-          <div style={{ width: '100%', height: 240 }}>
-            <ResponsiveContainer>
+          {/* Explicit dimensions: a bare ResponsiveContainer inside a parent
+              with no resolved height measures itself at -1 and logs a warning
+              on every mount. */}
+          <div className="w-full h-60">
+            <ResponsiveContainer width="100%" height={240} minWidth={0}>
               <AreaChart data={trajectoryData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="atlFill" x1="0" y1="0" x2="0" y2="1">
@@ -612,7 +615,7 @@ function PlanPage() {
                   y={atlTarget}
                   stroke={chartTheme.colors.semantic.positive}
                   strokeDasharray="4 4"
-                  label={{ value: 'ATL goal', fill: chartTheme.colors.semantic.positive, fontSize: 10, position: 'right' }}
+                  label={{ value: 'ATL goal', fill: chartTheme.colors.semantic.positive, fontSize: 11, position: 'right' }}
                 />
                 <ReferenceLine
                   y={0}
@@ -650,7 +653,7 @@ function PlanPage() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <p className="text-[0.7rem] text-text-muted leading-relaxed mt-4">
+          <p className="text-[0.75rem] text-text-muted leading-relaxed mt-4">
             Fatigue (ATL) coming down while fitness (CTL) holds is the signature of a successful recovery block.
             Form (TSB) climbing toward 0 means you'll be ready to push again.
           </p>
@@ -671,21 +674,21 @@ function PlanPage() {
             <>
               <div className="flex items-baseline justify-between mb-4 flex-wrap gap-3">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">This Week</h3>
-                  <span className={`text-[0.7rem] uppercase tracking-wider font-semibold px-2 py-0.5 rounded border ${meta.tone}`}>
+                  <h3 className={cardTitle}>This Week</h3>
+                  <span className={`text-[0.75rem] uppercase tracking-wider font-semibold px-2 py-0.5 rounded border ${meta.tone}`}>
                     {meta.title}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   {!isPaused && (
-                    <span className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold max-[480px]:hidden">
+                    <span className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold max-[480px]:hidden">
                       Planned vs actual
                     </span>
                   )}
                   <button
                     type="button"
                     onClick={() => setWeekPaused(!isPaused)}
-                    className={`text-[0.7rem] font-semibold px-2.5 py-1 rounded border transition-colors ${
+                    className={`text-[0.75rem] font-semibold px-2.5 py-1 rounded border transition-colors ${
                       isPaused
                         ? 'text-accent border-accent/40 bg-accent/10 hover:bg-accent/20'
                         : 'text-text-muted border-border-subtle hover:text-text-secondary hover:bg-bg-tertiary'
@@ -701,7 +704,7 @@ function PlanPage() {
                   <p className="text-sm text-text-secondary leading-relaxed">
                     {PAUSED_WEEK_META.description}
                   </p>
-                  <p className="text-[0.7rem] text-text-muted leading-relaxed mt-2">
+                  <p className="text-[0.75rem] text-text-muted leading-relaxed mt-2">
                     This week won't count against adherence in Plan History. Resuming re-locks the
                     week to the phase your current fitness numbers suggest
                     {phaseTsb !== null && (
@@ -713,7 +716,7 @@ function PlanPage() {
                   </p>
                 </div>
               ) : (
-              <p className="text-[0.7rem] text-text-muted leading-relaxed mb-4">
+              <p className="text-[0.75rem] text-text-muted leading-relaxed mb-4">
                 {meta.description} · auto-classified from your selected sessions
                 {phaseTsb !== null && (
                   <> · TSB <span className="data-value text-text-secondary">{phaseTsb >= 0 ? '+' : ''}{phaseTsb}</span></>
@@ -755,7 +758,7 @@ function PlanPage() {
               </div>
               {totalNonRest > 0 && (
                 <div className="mb-6">
-                  <div className="flex items-center justify-between text-[0.65rem] text-text-muted uppercase tracking-wider font-semibold mb-1.5">
+                  <div className="flex items-center justify-between text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold mb-1.5">
                     <span>Riding time mix</span>
                     <span className="data-value normal-case tracking-normal text-text-muted/70">
                       {Math.round(easyPct)}% easy · {Math.round(intensityPct)}% intensity
@@ -787,13 +790,13 @@ function PlanPage() {
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[0.65rem] uppercase tracking-wider font-semibold text-text-muted">
+                      <span className="text-[0.75rem] uppercase tracking-wider font-semibold text-text-muted">
                         Plan recommendations
                       </span>
                       {inLine ? (
-                        <span className="text-[0.6rem] text-success uppercase tracking-wider">Balanced</span>
+                        <span className="text-[0.75rem] text-success uppercase tracking-wider">Balanced</span>
                       ) : (
-                        <span className="text-[0.6rem] text-warning uppercase tracking-wider">{recs.length} suggestion{recs.length === 1 ? '' : 's'}</span>
+                        <span className="text-[0.75rem] text-warning uppercase tracking-wider">{recs.length} suggestion{recs.length === 1 ? '' : 's'}</span>
                       )}
                     </div>
                     <ol className="flex flex-col gap-1.5 list-decimal list-inside">
@@ -848,21 +851,21 @@ function PlanPage() {
                 } ${!isPastOrToday ? 'opacity-75' : ''}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[0.65rem] text-text-muted uppercase tracking-wider font-semibold">
-                    {format(date, 'EEE', { locale: da })}
+                  <span className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">
+                    {format(date, 'EEE', { locale: dateFnsLocale })}
                     {thisDayIsToday && (
                       <span className="ml-1.5 text-accent">· Today</span>
                     )}
                   </span>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[0.65rem] text-text-muted data-value">
-                      {format(date, 'd. MMM', { locale: da })}
+                    <span className="text-[0.75rem] text-text-muted data-value">
+                      {format(date, 'd MMM', { locale: dateFnsLocale })}
                     </span>
                     <button
                       type="button"
                       onClick={() => setEditingDayIdx(editing ? null : dayIdx)}
                       title="Change session type"
-                      className="text-[0.7rem] text-text-muted hover:text-text-secondary transition-colors px-1 leading-none"
+                      className="text-[0.75rem] text-text-muted hover:text-text-secondary transition-colors px-1 leading-none"
                     >
                       ⋯
                     </button>
@@ -873,7 +876,7 @@ function PlanPage() {
                   <span className={`size-2 rounded-full ${colors.dot}`} />
                   <span className={`text-sm font-semibold ${colors.text}`}>{session.label}</span>
                   {isCustomized && (
-                    <span className="text-[0.55rem] text-text-muted/70 italic" title="Customized for this week">·</span>
+                    <span className="text-[0.75rem] text-text-muted/70 italic" title="Customized for this week">·</span>
                   )}
                 </div>
 
@@ -897,7 +900,7 @@ function PlanPage() {
                           }`}
                         >
                           {cat.label}
-                          <span className="text-[0.65rem] text-text-muted/70 ml-1">{cat.duration}</span>
+                          <span className="text-[0.75rem] text-text-muted/70 ml-1">{cat.duration}</span>
                         </button>
                       )
                     })}
@@ -908,7 +911,7 @@ function PlanPage() {
                           setDayType(weekStart, dayIdx, null)
                           setEditingDayIdx(null)
                         }}
-                        className="text-left text-[0.7rem] py-1 px-2 mt-0.5 border-t border-border-subtle text-text-muted hover:text-text-secondary transition-colors"
+                        className="text-left text-[0.75rem] py-1 px-2 mt-0.5 border-t border-border-subtle text-text-muted hover:text-text-secondary transition-colors"
                       >
                         ↺ Reset to template
                       </button>
@@ -924,7 +927,7 @@ function PlanPage() {
                   const plannedDayTSS = plannedSessionTSS(session)
                   return (
                     <div className="mt-1 pt-2 border-t border-border-subtle flex flex-col gap-1">
-                      <div className="text-[0.65rem] text-text-muted uppercase tracking-wider font-semibold">
+                      <div className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">
                         Actual
                       </div>
                       <div className="text-xs text-text-primary data-value">
@@ -942,7 +945,7 @@ function PlanPage() {
                           </>
                         )}
                       </div>
-                      <div className="text-[0.7rem] text-text-secondary data-value">
+                      <div className="text-[0.75rem] text-text-secondary data-value">
                         TSS {dayTSS}
                         {plannedDayTSS > 0 && (
                           <span className="text-text-muted"> / {plannedDayTSS}</span>
@@ -964,27 +967,27 @@ function PlanPage() {
                   const plannedDayTSS = plannedSessionTSS(session)
                   return (
                     <div className="mt-1 pt-2 border-t border-border-subtle flex flex-col gap-1">
-                      <div className="text-[0.65rem] text-text-muted uppercase tracking-wider font-semibold">
+                      <div className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">
                         Target
                       </div>
                       <div className="text-xs text-text-primary data-value">
                         {session.duration}
                       </div>
                       {targetPowerLabel(session, ftp, z2HrCeiling, maxHR) && (
-                        <div className="text-[0.7rem] text-text-muted data-value">
+                        <div className="text-[0.75rem] text-text-muted data-value">
                           {targetPowerLabel(session, ftp, z2HrCeiling, maxHR)}
                         </div>
                       )}
                       {plannedDayTSS > 0 && (
-                        <div className="text-[0.7rem] text-text-secondary data-value">
+                        <div className="text-[0.75rem] text-text-secondary data-value">
                           TSS {plannedDayTSS}
                         </div>
                       )}
-                      <div className="text-[0.7rem] text-text-muted leading-relaxed">
+                      <div className="text-[0.75rem] text-text-muted leading-relaxed">
                         {session.detail}
                       </div>
                       {thisDayIsToday && !actual && session.type !== 'rest' && (
-                        <div className="text-[0.7rem] text-accent italic">
+                        <div className="text-[0.75rem] text-accent italic">
                           Awaiting today's ride
                         </div>
                       )}
@@ -993,9 +996,9 @@ function PlanPage() {
                 })()}
 
                 <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-                  <span className="text-[0.7rem] text-text-muted data-value">{session.duration}</span>
+                  <span className="text-[0.75rem] text-text-muted data-value">{session.duration}</span>
                   <span
-                    className={`text-[0.6rem] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${fit.tone}`}
+                    className={`text-[0.75rem] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${fit.tone}`}
                   >
                     {fit.label}
                   </span>
@@ -1009,25 +1012,25 @@ function PlanPage() {
         {!isPaused && (
         <div className="mt-6 pt-6 border-t border-border-subtle grid grid-cols-3 gap-4 max-md:grid-cols-1">
           <div>
-            <div className="text-[0.65rem] text-text-muted uppercase tracking-wider font-semibold mb-1">
+            <div className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold mb-1">
               Power target
             </div>
             <div className="text-sm text-text-primary data-value">
               {z2PowerLow}–{z2PowerHigh}W
             </div>
-            <div className="text-[0.7rem] text-text-muted mt-0.5">Endurance zone (64–75% FTP)</div>
+            <div className="text-[0.75rem] text-text-muted mt-0.5">Endurance zone (64–75% FTP)</div>
           </div>
           <div>
-            <div className="text-[0.65rem] text-text-muted uppercase tracking-wider font-semibold mb-1">
+            <div className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold mb-1">
               HR ceiling
             </div>
             <div className="text-sm text-text-primary data-value">{z2HrCeiling} bpm</div>
-            <div className="text-[0.7rem] text-text-muted mt-0.5">
+            <div className="text-[0.75rem] text-text-muted mt-0.5">
               Karvonen 70% · stay in Fat Burn zone
             </div>
           </div>
           <div>
-            <div className="text-[0.65rem] text-text-muted uppercase tracking-wider font-semibold mb-1">
+            <div className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold mb-1">
               {PHASE_META[activePhase].goalLabel}
             </div>
             <div className="text-sm text-text-primary">
@@ -1035,7 +1038,7 @@ function PlanPage() {
                 ? <>ATL {baseline?.atl ?? '—'} → ~{atlTarget}</>
                 : <>CTL climbing · TSB −10 to +5</>}
             </div>
-            <div className="text-[0.7rem] text-text-muted mt-0.5">
+            <div className="text-[0.75rem] text-text-muted mt-0.5">
               {PHASE_META[activePhase].goalDetail}
             </div>
           </div>
@@ -1047,10 +1050,10 @@ function PlanPage() {
       {pastWeeks.length > 0 && (
         <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4 max-[480px]:p-3.5">
           <div className="flex items-baseline justify-between mb-6 flex-wrap gap-2">
-            <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">
+            <h3 className={cardTitle}>
               Plan History
             </h3>
-            <span className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">
+            <span className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">
               Last {pastWeeks.length} week{pastWeeks.length === 1 ? '' : 's'} · retrospective
             </span>
           </div>
@@ -1071,10 +1074,10 @@ function PlanPage() {
             })}
           </div>
 
-          <p className="text-[0.7rem] text-text-muted leading-relaxed mt-4">
+          <p className="text-[0.75rem] text-text-muted leading-relaxed mt-4">
             {planStartDate && (
               <>
-                Plan started <span className="data-value text-text-secondary">{format(planStartDate, 'd. MMM yyyy', { locale: da })}</span>.{' '}
+                Plan started <span className="data-value text-text-secondary">{format(planStartDate, 'd MMM yyyy', { locale: dateFnsLocale })}</span>.{' '}
               </>
             )}
             Weeks before that show raw training load (no adherence scoring). Plan weeks show phase
@@ -1086,10 +1089,10 @@ function PlanPage() {
       {/* Weekly template (unchanged) */}
       <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4 max-[480px]:p-3.5">
         <div className="flex items-baseline justify-between mb-6 flex-wrap gap-2">
-          <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">
+          <h3 className={cardTitle}>
             Ongoing Weekly Template
           </h3>
-          <span className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">
+          <span className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">
             After recovery week · 5–7 sessions
           </span>
         </div>
@@ -1113,7 +1116,7 @@ function PlanPage() {
                   <span className={`text-sm font-semibold ${colors.text}`}>{session.label}</span>
                 </div>
                 <div className="text-sm text-text-secondary flex-1 max-md:text-xs">{session.detail}</div>
-                <div className="text-xs text-text-muted data-value max-md:text-[0.7rem]">
+                <div className="text-xs text-text-muted data-value max-md:text-[0.75rem]">
                   {session.targets}
                 </div>
               </div>
@@ -1124,7 +1127,7 @@ function PlanPage() {
 
       {/* Zone reference */}
       <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4 max-[480px]:p-3.5">
-        <h3 className="text-lg font-semibold text-text-primary mb-5 max-[480px]:text-base">
+        <h3 className={`${cardTitle} mb-5`}>
           Training Targets
         </h3>
 
@@ -1139,7 +1142,7 @@ function PlanPage() {
               <span className="text-sm text-text-muted font-normal ml-1">W</span>
             </div>
             <div className="text-xs text-text-muted">HR {z2HrFloor}–{z2HrCeiling} bpm</div>
-            <div className="text-[0.7rem] text-text-muted mt-2 leading-relaxed">
+            <div className="text-[0.75rem] text-text-muted mt-2 leading-relaxed">
               The bread and butter. Builds aerobic base without fatigue cost. Should feel easy.
             </div>
           </div>
@@ -1154,7 +1157,7 @@ function PlanPage() {
               <span className="text-sm text-text-muted font-normal ml-1">W</span>
             </div>
             <div className="text-xs text-text-muted">95–100% FTP</div>
-            <div className="text-[0.7rem] text-text-muted mt-2 leading-relaxed">
+            <div className="text-[0.75rem] text-text-muted mt-2 leading-relaxed">
               Sustained hard. Intervals 10–20 min. This is the lever that raises FTP.
             </div>
           </div>
@@ -1169,7 +1172,7 @@ function PlanPage() {
               <span className="text-sm text-text-muted font-normal ml-1">W</span>
             </div>
             <div className="text-xs text-text-muted">110–115% FTP</div>
-            <div className="text-[0.7rem] text-text-muted mt-2 leading-relaxed">
+            <div className="text-[0.75rem] text-text-muted mt-2 leading-relaxed">
               Short maximal. Intervals 3–6 min. Raises the ceiling — where your current curve is weakest.
             </div>
           </div>
@@ -1178,7 +1181,7 @@ function PlanPage() {
 
       {/* Rules */}
       <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4 max-[480px]:p-3.5">
-        <h3 className="text-lg font-semibold text-text-primary mb-5 max-[480px]:text-base">
+        <h3 className={`${cardTitle} mb-5`}>
           Non-negotiables
         </h3>
 
@@ -1225,10 +1228,10 @@ function StatTile({
       <div className={`text-2xl font-semibold data-value ${accentPositive ? 'text-accent' : 'text-text-primary'}`}>
         {big}
       </div>
-      <div className="text-[0.7rem] text-text-muted uppercase tracking-wider font-semibold">
+      <div className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">
         {label}
       </div>
-      <div className="text-[0.7rem] text-text-muted leading-relaxed">{hint}</div>
+      <div className="text-[0.75rem] text-text-muted leading-relaxed">{hint}</div>
     </div>
   )
 }
@@ -1270,12 +1273,17 @@ function WeekHistoryRow({
       ? 'text-teal-300 bg-teal-500/10 border-teal-500/30'
       : 'text-orange-300 bg-orange-500/10 border-orange-500/30'
 
+  // Red and green mean good and bad, not high and low. A recovery week that
+  // logged less than a build week went exactly as designed, and used to render
+  // as a red bar between green ones.
   const adherenceTone =
-    adherencePct >= 75
-      ? 'bg-linear-to-r from-emerald-500 to-teal-400'
-      : adherencePct >= 50
-        ? 'bg-linear-to-r from-amber-500 to-amber-400'
-        : 'bg-linear-to-r from-rose-500 to-rose-400'
+    phase === 'recovery'
+      ? 'bg-linear-to-r from-teal-600 to-teal-400'
+      : adherencePct >= 75
+        ? 'bg-linear-to-r from-emerald-500 to-teal-400'
+        : adherencePct >= 50
+          ? 'bg-linear-to-r from-amber-500 to-amber-400'
+          : 'bg-linear-to-r from-rose-500 to-rose-400'
 
   return (
     <div className="border border-border-subtle bg-bg-tertiary/40 rounded-[var(--radius-md)] px-4 py-3 flex items-center gap-6 flex-wrap max-lg:gap-4 max-md:flex-col max-md:items-stretch max-md:gap-3">
@@ -1283,13 +1291,13 @@ function WeekHistoryRow({
       <div className="min-w-40 shrink-0 flex items-center gap-3 max-md:justify-between">
         <div>
           <div className="text-sm text-text-primary font-medium data-value">
-            {format(weekStart, 'd. MMM', { locale: da })} – {format(weekEnd, 'd. MMM', { locale: da })}
+            {format(weekStart, 'd MMM', { locale: dateFnsLocale })} – {format(weekEnd, 'd MMM', { locale: dateFnsLocale })}
           </div>
-          <div className="text-[0.7rem] text-text-muted">
+          <div className="text-[0.75rem] text-text-muted">
             {formatDuration(totalTimeMin)} · {totalActivities} rides
           </div>
         </div>
-        <span className={`text-[0.6rem] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${phaseTone}`}>
+        <span className={`text-[0.75rem] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${phaseTone}`}>
           {isPrePlan ? 'Pre-plan' : phase === 'recovery' ? 'Recovery' : phase === 'paused' ? 'Paused' : 'Build'}
           {isOverridden && !isPrePlan && <span className="ml-1 opacity-70">·</span>}
         </span>
@@ -1308,7 +1316,7 @@ function WeekHistoryRow({
         <div className="flex-1 min-w-48 max-md:w-full">
           <div className="flex items-baseline justify-between mb-1">
             <span className="text-sm text-text-primary font-semibold data-value">{adherencePct}%</span>
-            <span className="text-[0.7rem] text-text-muted">
+            <span className="text-[0.75rem] text-text-muted">
               {sessionsLogged}/{scoredCount} sessions
             </span>
           </div>
@@ -1335,7 +1343,7 @@ function WeekHistoryRow({
 function TSSCell({ actual, planned }: { actual: number; planned: number | null }) {
   return (
     <div className="flex flex-col gap-0.5 items-start">
-      <span className="text-[0.6rem] text-text-muted uppercase tracking-wider font-semibold">TSS</span>
+      <span className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">TSS</span>
       <span className="text-xs font-semibold data-value text-text-primary">
         {actual}
         {planned !== null && (
@@ -1358,7 +1366,7 @@ function DeltaStat({ label, delta, positiveUp }: { label: string; delta: number 
 
   return (
     <div className="flex flex-col gap-0.5 items-start">
-      <span className="text-[0.6rem] text-text-muted uppercase tracking-wider font-semibold">{label}</span>
+      <span className="text-[0.75rem] text-text-muted uppercase tracking-wider font-semibold">{label}</span>
       <span className={`text-xs font-semibold data-value ${color}`}>
         {isNull ? '—' : `${arrow} ${Math.abs(delta)}`}
       </span>

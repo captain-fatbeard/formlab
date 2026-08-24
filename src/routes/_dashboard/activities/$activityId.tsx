@@ -795,7 +795,7 @@ function AchievementBadges({ achievements }: { achievements?: Array<{ type_id: n
           )
         }
         return (
-          <span key={i} className={`py-1 px-2 rounded-[var(--radius-sm)] text-[0.65rem] font-semibold ${style.bg} ${style.text}`}>
+          <span key={i} className={`py-1 px-2 rounded-[var(--radius-sm)] text-[0.75rem] font-semibold ${style.bg} ${style.text}`}>
             {style.label}
           </span>
         )
