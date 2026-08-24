@@ -11,7 +11,7 @@ import {
   formatElevation,
   formatDuration,
 } from '~/lib/format'
-import { buttonPrimary, buttonSecondary } from '~/lib/styles'
+import { buttonPrimary, buttonSecondary, filterSelect } from '~/lib/styles'
 import { useModalPanel } from '~/lib/use-modal-panel'
 import { calculateActivityScores } from '~/lib/performance'
 import { getScoreLabel, scoreLabelClasses, activityTypeClasses } from '~/lib/activities'
@@ -412,7 +412,6 @@ export function ActivityList({ activities }: ActivityListProps) {
   // Numbers are what this table is scanned for, so they are right-aligned and
   // set in the tabular figures the rest of the app uses.
   const tdNumeric = `${tdClass} text-right data-value whitespace-nowrap`
-  const filterSelectClass = "custom-select bg-bg-tertiary border border-border text-text-secondary py-1.5 pr-8 pl-3 rounded-[var(--radius-sm)] text-[0.75rem] cursor-pointer transition-all duration-150 hover:border-text-muted focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15 shrink-0"
 
   return (
     <>
@@ -474,7 +473,7 @@ export function ActivityList({ activities }: ActivityListProps) {
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
-          className={filterSelectClass}
+          className={filterSelect}
           title="Filter by category"
         >
           <option value="all">All categories</option>
@@ -485,7 +484,7 @@ export function ActivityList({ activities }: ActivityListProps) {
         <select
           value={scoreFilter}
           onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)}
-          className={filterSelectClass}
+          className={filterSelect}
           title="Filter by ride score"
         >
           <option value="all">Any score</option>
@@ -499,7 +498,7 @@ export function ActivityList({ activities }: ActivityListProps) {
         <select
           value={minDistanceKm}
           onChange={(e) => setMinDistanceKm(Number(e.target.value))}
-          className={filterSelectClass}
+          className={filterSelect}
           title="Filter by minimum distance"
         >
           {DISTANCE_OPTIONS.map((o) => (
@@ -510,7 +509,7 @@ export function ActivityList({ activities }: ActivityListProps) {
         <select
           value={yearFilter}
           onChange={(e) => setYearFilter(e.target.value)}
-          className={filterSelectClass}
+          className={filterSelect}
           title="Filter by year"
         >
           <option value="all">All years</option>
@@ -540,7 +539,7 @@ export function ActivityList({ activities }: ActivityListProps) {
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}
             aria-label="Rows per page"
-            className={filterSelectClass}
+            className={filterSelect}
           >
             {PAGE_SIZES.map((size) => (
               <option key={size} value={size}>{size}</option>

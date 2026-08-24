@@ -20,6 +20,23 @@ export const cardTitle = 'text-base font-semibold text-text-primary'
  * White on the teal accent measures 2.5:1. Dark on the same teal measures
  * 7.9:1 and looks better, so that is the primary button everywhere. */
 
+/* ── Filters ──────────────────────────────────────────────────────────────
+ * The compact select used by the top-bar filters and the activities toolbar.
+ * Shared so the two can't drift apart — the top-bar pills used to carry their
+ * own geometry, chevron and hover colour. */
+
+const FILTER_SELECT_BASE =
+  'custom-select bg-bg-tertiary border border-border text-text-secondary py-1.5 pr-8 pl-3 rounded-[var(--radius-sm)] text-[0.75rem] cursor-pointer transition-colors duration-150 hover:border-text-muted shrink-0'
+
+/** A real `<select>`. */
+export const filterSelect =
+  `${FILTER_SELECT_BASE} focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/15`
+
+/** A wrapper holding an invisible native select, for a control that shows a
+ *  shorter label than the option it has selected. */
+export const filterSelectShell =
+  `${FILTER_SELECT_BASE} relative flex items-center whitespace-nowrap focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/15`
+
 /** Primary action — dark text on accent. */
 export const buttonPrimary =
   'bg-accent text-bg-primary border border-accent py-2.5 px-5 rounded-[var(--radius-md)] text-sm font-semibold cursor-pointer transition-all duration-200 no-underline inline-flex items-center justify-center gap-2 hover:bg-accent-light hover:border-accent-light disabled:opacity-50 disabled:cursor-not-allowed'

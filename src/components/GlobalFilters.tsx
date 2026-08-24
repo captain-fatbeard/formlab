@@ -1,5 +1,6 @@
 import { useDashboard } from '~/lib/dashboard-context'
 import type { TimeRange, ActivityType } from '~/lib/dashboard-context'
+import { filterSelectShell } from '~/lib/styles'
 import {
   TIME_RANGE_LABELS,
   TIME_RANGE_SHORT,
@@ -29,13 +30,10 @@ function FilterPill<T extends string>({
   display,
 }: FilterPillProps<T>) {
   return (
-    <div className="relative flex items-center h-8 rounded-[var(--radius-sm)] bg-bg-tertiary border border-border text-text-secondary transition-colors duration-150 hover:border-text-muted hover:text-text-primary focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/15">
-      <span className="flex items-center gap-1.5 pl-3.5 pr-2.5 text-[0.75rem] font-medium whitespace-nowrap">
-        {display}
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-          <path d="M6 8L2 4h8z" />
-        </svg>
-      </span>
+    <div className={filterSelectShell}>
+      {/* The chevron comes from `.custom-select`, the same background image
+          every other select in the app draws, so the two match exactly. */}
+      <span>{display}</span>
       <select
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         aria-label={label}

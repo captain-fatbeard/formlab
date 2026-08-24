@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { type StravaActivity, metersToKm } from '~/lib/strava'
 import { useDashboard } from '~/lib/dashboard-context'
@@ -161,6 +161,8 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
   const [hovered, setHovered] = useState<CalendarDay | null>(null)
   const [pinned, setPinned] = useState<CalendarDay | null>(null)
   const gridScroller = useRef<HTMLDivElement>(null)
+  const detailContent = useRef<HTMLDivElement>(null)
+  const [detailHeight, setDetailHeight] = useState<number>()
 
   const years = useMemo(() => {
     const set = new Set<string>()
@@ -202,6 +204,19 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
   const { summary } = calendar
   const consistency = summary.days > 0 ? Math.round((summary.activeDays / summary.days) * 100) : 0
   const detail = pinned ?? hovered
+
+  // The detail line is one line for a rest day and five for a double day, so
+  // moving across the grid used to make the block jump on every cell. Measure
+  // the content and animate the wrapper to it instead.
+  useLayoutEffect(() => {
+    const element = detailContent.current
+    if (!element) return
+    const measure = () => setDetailHeight(element.offsetHeight)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [detail])
 
   // The current year opens on January otherwise, so reaching today means
   // scrolling right past nine months of history every time.
@@ -284,6 +299,10 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
             <div
               className="grid grid-rows-7 grid-flow-col gap-[3px] flex-1 min-w-0"
               style={{ gridTemplateColumns: `repeat(${calendar.weeks.length}, minmax(0.5rem, 1fr))` }}
+              onMouseLeave={() => setHovered(null)}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHovered(null)
+              }}
             >
               {calendar.weeks.map((week, wi) =>
                 week.map((day, di) => {
@@ -309,9 +328,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
                       key={`${wi}-${di}`}
                       type="button"
                       onMouseEnter={() => setHovered(day)}
-                      onMouseLeave={() => setHovered(null)}
                       onFocus={() => setHovered(day)}
-                      onBlur={() => setHovered(null)}
                       onClick={() => setPinned((p) => (p?.date === day.date ? null : day))}
                       aria-label={`${day.date}: ${day.count} ${day.count === 1 ? 'activity' : 'activities'}, ${formatHours(day.movingTime)}, ${Math.round(day.load)} load`}
                       className="aspect-square w-full rounded-[2px] transition-transform hover:scale-110 focus:scale-110 focus:outline-none"
@@ -344,12 +361,18 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
         ))}
       </div>
 
-      {/* Day detail — reserves one line so the layout doesn't jump, and grows
-          for a day with several activities. Click pins a day, which is how a
-          touch device reaches this at all. */}
-      <div className="mt-4 min-h-[2.25rem] border-t border-border-subtle pt-3">
+      {/* Day detail. Its height is measured and animated rather than left to
+          the content: a rest day is one line and a double day is five, so
+          moving across a week used to make the whole block jump on every cell.
+          Click pins a day, which is how a touch device reaches this at all. */}
+      <div className="mt-4 border-t border-border-subtle pt-3">
+        <div
+          className="overflow-hidden transition-[height] duration-200 ease-out"
+          style={{ height: detailHeight }}
+        >
+        <div ref={detailContent}>
         {detail ? (
-          <div>
+          <div className="min-h-[1.25rem]">
             <div className="flex items-baseline gap-3 flex-wrap">
               <span className="text-sm font-semibold text-text-primary">
                 {formatDateWithWeekday(`${detail.date}T00:00:00`)}
@@ -391,6 +414,8 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
         ) : (
           <p className="text-xs text-text-muted">Select a day for detail.</p>
         )}
+        </div>
+        </div>
       </div>
 
       {/* Period summary */}
