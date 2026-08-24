@@ -103,7 +103,7 @@ export function PerformanceCharts({ lifetimeActivities }: PerformanceChartsProps
             )}
           </div>
           {!powerBelowThreshold && powerTrendLine && (
-            <span className={`text-xs py-1.5 px-3.5 rounded-full font-semibold ${trendClasses[powerTrendLine.trend]}`}>
+            <span className={`text-xs py-1.5 px-3.5 rounded-[var(--radius-sm)] font-semibold ${trendClasses[powerTrendLine.trend]}`}>
               {powerTrendLine.trend === 'improving' && '↑ Improving'}
               {powerTrendLine.trend === 'declining' && '↓ Declining'}
               {powerTrendLine.trend === 'stable' && '→ Stable'}

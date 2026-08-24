@@ -475,9 +475,9 @@ function PlanPage() {
               {Math.round((elapsedDays / 7) * 100)}% through the week
             </span>
           </div>
-          <div className="h-2 bg-bg-tertiary rounded-full overflow-hidden relative">
+          <div className="h-2 bg-bg-tertiary rounded-[var(--radius-sm)] overflow-hidden relative">
             <div
-              className="h-full bg-linear-to-r from-accent to-teal-400 rounded-full transition-all duration-500"
+              className="h-full bg-linear-to-r from-accent to-teal-400 rounded-[var(--radius-sm)] transition-all duration-500"
               style={{ width: `${(elapsedDays / 7) * 100}%` }}
             />
             {/* Day markers */}
@@ -558,9 +558,9 @@ function PlanPage() {
                 {atlProgressToGoal}% of the way from ATL {baseline.atl} → {atlTarget}
               </span>
             </div>
-            <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+            <div className="h-1.5 bg-bg-tertiary rounded-[var(--radius-sm)] overflow-hidden">
               <div
-                className="h-full bg-linear-to-r from-amber-500 to-emerald-400 rounded-full transition-all duration-500"
+                className="h-full bg-linear-to-r from-amber-500 to-emerald-400 rounded-[var(--radius-sm)] transition-all duration-500"
                 style={{ width: `${atlProgressToGoal}%` }}
               />
             </div>
@@ -675,7 +675,7 @@ function PlanPage() {
               <div className="flex items-baseline justify-between mb-4 flex-wrap gap-3">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h3 className={cardTitle}>This Week</h3>
-                  <span className={`text-[0.75rem] uppercase tracking-wider font-semibold px-2 py-0.5 rounded border ${meta.tone}`}>
+                  <span className={`text-[0.75rem] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-[var(--radius-sm)] border ${meta.tone}`}>
                     {meta.title}
                   </span>
                 </div>
@@ -688,7 +688,7 @@ function PlanPage() {
                   <button
                     type="button"
                     onClick={() => setWeekPaused(!isPaused)}
-                    className={`text-[0.75rem] font-semibold px-2.5 py-1 rounded border transition-colors ${
+                    className={`text-[0.75rem] font-semibold px-2.5 py-1 rounded-[var(--radius-sm)] border transition-colors ${
                       isPaused
                         ? 'text-accent border-accent/40 bg-accent/10 hover:bg-accent/20'
                         : 'text-text-muted border-border-subtle hover:text-text-secondary hover:bg-bg-tertiary'
@@ -764,7 +764,7 @@ function PlanPage() {
                       {Math.round(easyPct)}% easy · {Math.round(intensityPct)}% intensity
                     </span>
                   </div>
-                  <div className="h-2 rounded-full overflow-hidden flex bg-bg-tertiary">
+                  <div className="h-2 rounded-[var(--radius-sm)] overflow-hidden flex bg-bg-tertiary">
                     {easyPct > 0 && (
                       <div className="bg-teal-400" style={{ width: `${easyPct}%` }} title={`Easy ${formatDuration(stats.easyMinutes)}`} />
                     )}
@@ -893,7 +893,7 @@ function PlanPage() {
                             setDayType(weekStart, dayIdx, t)
                             setEditingDayIdx(null)
                           }}
-                          className={`text-left text-xs py-1 px-2 rounded transition-colors ${
+                          className={`text-left text-xs py-1 px-2 rounded-[var(--radius-sm)] transition-colors ${
                             active
                               ? 'bg-accent/15 text-accent'
                               : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
@@ -998,7 +998,7 @@ function PlanPage() {
                 <div className="mt-auto flex items-center justify-between gap-2 pt-1">
                   <span className="text-[0.75rem] text-text-muted data-value">{session.duration}</span>
                   <span
-                    className={`text-[0.75rem] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${fit.tone}`}
+                    className={`text-[0.75rem] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-[var(--radius-sm)] border ${fit.tone}`}
                   >
                     {fit.label}
                   </span>
@@ -1297,7 +1297,7 @@ function WeekHistoryRow({
             {formatDuration(totalTimeMin)} · {totalActivities} rides
           </div>
         </div>
-        <span className={`text-[0.75rem] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${phaseTone}`}>
+        <span className={`text-[0.75rem] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-[var(--radius-sm)] border ${phaseTone}`}>
           {isPrePlan ? 'Pre-plan' : phase === 'recovery' ? 'Recovery' : phase === 'paused' ? 'Paused' : 'Build'}
           {isOverridden && !isPrePlan && <span className="ml-1 opacity-70">·</span>}
         </span>
@@ -1320,9 +1320,9 @@ function WeekHistoryRow({
               {sessionsLogged}/{scoredCount} sessions
             </span>
           </div>
-          <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+          <div className="h-1.5 bg-bg-tertiary rounded-[var(--radius-sm)] overflow-hidden">
             <div
-              className={`h-full ${adherenceTone} rounded-full transition-all duration-300`}
+              className={`h-full ${adherenceTone} rounded-[var(--radius-sm)] transition-all duration-300`}
               style={{ width: `${adherencePct}%` }}
             />
           </div>

@@ -42,7 +42,7 @@ export function RunningMetrics({ activities, age, gender }: RunningMetricsProps)
               <span className="text-sm text-text-secondary mt-1 font-medium">Est. VO2max (Running)</span>
               <span className="text-xs text-text-muted">ml/kg/min</span>
             </div>
-            <span className={`absolute top-4 right-4 text-[0.75rem] py-1 px-2.5 rounded-full font-bold uppercase tracking-wide ${badgeClasses[metrics.vo2maxCategory.toLowerCase().replace(' ', '-')] || ''}`}>
+            <span className={`absolute top-4 right-4 text-[0.75rem] py-1 px-2.5 rounded-[var(--radius-sm)] font-bold uppercase tracking-wide ${badgeClasses[metrics.vo2maxCategory.toLowerCase().replace(' ', '-')] || ''}`}>
               {metrics.vo2maxCategory}
             </span>
             <ComparisonBar

@@ -29,7 +29,7 @@ function FilterPill<T extends string>({
   display,
 }: FilterPillProps<T>) {
   return (
-    <div className="relative flex items-center h-8 rounded-full bg-bg-tertiary border border-border text-text-secondary transition-colors duration-150 hover:border-text-muted hover:text-text-primary focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/15">
+    <div className="relative flex items-center h-8 rounded-[var(--radius-sm)] bg-bg-tertiary border border-border text-text-secondary transition-colors duration-150 hover:border-text-muted hover:text-text-primary focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/15">
       <span className="flex items-center gap-1.5 pl-3.5 pr-2.5 text-[0.75rem] font-medium whitespace-nowrap">
         {display}
         <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">

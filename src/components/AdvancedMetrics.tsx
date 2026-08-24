@@ -33,7 +33,7 @@ export function AdvancedMetrics({ activities, weight, age, gender }: AdvancedMet
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           </div>
-          <span className={`text-[0.75rem] py-1 px-2.5 rounded-full font-bold uppercase tracking-wide ${badgeClasses[sliderVo2maxCategory.toLowerCase().replace(' ', '-')] || ''}`}>
+          <span className={`text-[0.75rem] py-1 px-2.5 rounded-[var(--radius-sm)] font-bold uppercase tracking-wide ${badgeClasses[sliderVo2maxCategory.toLowerCase().replace(' ', '-')] || ''}`}>
             {sliderVo2maxCategory}
           </span>
         </div>
@@ -53,7 +53,7 @@ export function AdvancedMetrics({ activities, weight, age, gender }: AdvancedMet
             step={0.5}
             value={sliderWeight}
             onChange={(e) => setSliderWeight(Number(e.target.value))}
-            className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-border-subtle accent-accent"
+            className="w-full h-1.5 rounded-[var(--radius-sm)] appearance-none cursor-pointer bg-border-subtle accent-accent"
           />
           <div className="flex justify-between text-[0.75rem] text-text-muted mt-1">
             <span>40 kg</span>
@@ -81,7 +81,7 @@ export function AdvancedMetrics({ activities, weight, age, gender }: AdvancedMet
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
               </svg>
             </div>
-            <span className="text-[0.75rem] py-1 px-2.5 rounded-full font-bold uppercase tracking-wide text-text-muted bg-bg-tertiary">
+            <span className="text-[0.75rem] py-1 px-2.5 rounded-[var(--radius-sm)] font-bold uppercase tracking-wide text-text-muted bg-bg-tertiary">
               Best {metrics.bestEF}
             </span>
           </div>

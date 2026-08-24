@@ -432,7 +432,7 @@ function ActivityDetailPage() {
                   fill={chartTheme.colors.amber.main}
                   fillOpacity={0.5}
                   name="Elevation"
-                  radius={[3, 3, 0, 0]}
+                  radius={[1, 1, 0, 0]}
                 />
                 <Line
                   yAxisId="left"

@@ -309,7 +309,7 @@ export function WeeklyProgress({ activities }: WeeklyProgressProps) {
             stroke={chartTheme.colors.neutral[500]}
             strokeDasharray="4 4"
           />
-          <Bar dataKey={seriesId} name={series.label} radius={[4, 4, 0, 0]}>
+          <Bar dataKey={seriesId} name={series.label} radius={[1, 1, 0, 0]}>
             {chartData.map((week) => (
               // The week in progress is dimmed rather than plotted as a
               // collapse: it is not a bad week, it is an unfinished one.

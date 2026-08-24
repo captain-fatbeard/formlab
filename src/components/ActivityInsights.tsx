@@ -135,7 +135,7 @@ export function ActivityInsights({
             }}
             formatter={(value: number) => [`${formatNumber(value)} cal`, 'Calories']}
           />
-          <Bar dataKey="calories" radius={[4, 4, 0, 0]} name="Calories">
+          <Bar dataKey="calories" radius={[1, 1, 0, 0]} name="Calories">
             {weeklyCalories.map((week) => (
               <Cell
                 key={week.week}

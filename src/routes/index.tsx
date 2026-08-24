@@ -82,7 +82,7 @@ function Home() {
               </linearGradient>
             </defs>
           </svg>
-          <div className="absolute -inset-4 bg-accent/20 rounded-2xl blur-2xl animate-pulse-glow" />
+          <div className="absolute -inset-4 bg-accent/20 rounded-[var(--radius-sm)] blur-2xl animate-pulse-glow" />
         </div>
         <div className="flex flex-col gap-3">
           <h1 className="text-6xl font-extrabold tracking-tight bg-linear-to-br from-text-primary via-text-primary to-accent-light bg-clip-text text-transparent max-md:text-5xl">

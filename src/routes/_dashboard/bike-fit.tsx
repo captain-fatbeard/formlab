@@ -540,8 +540,8 @@ function BikeFitPage() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-        <div className="bg-bg-secondary border border-border-subtle rounded-lg p-3 flex flex-col gap-3">
-          <div className="bg-black rounded-md overflow-hidden flex justify-center">
+        <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-sm)] p-3 flex flex-col gap-3">
+          <div className="bg-black rounded-[var(--radius-sm)] overflow-hidden flex justify-center">
             <div ref={stageRef} className="relative">
               <video
                 ref={videoRef}
@@ -641,11 +641,11 @@ function BikeFitPage() {
             return (
               <div
                 key={key}
-                className="bg-bg-secondary border border-border-subtle rounded-lg p-4 flex flex-col gap-2"
+                className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-sm)] p-4 flex flex-col gap-2"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-text-secondary">{range.label}</span>
-                  <span className={`text-[0.7rem] px-2 py-0.5 rounded font-medium ${STATUS_CLASS[st]}`}>
+                  <span className={`text-[0.7rem] px-2 py-0.5 rounded-[var(--radius-sm)] font-medium ${STATUS_CLASS[st]}`}>
                     {st === 'in' ? 'in range' : st === 'low' ? 'below' : st === 'high' ? 'above' : '—'}
                   </span>
                 </div>
@@ -688,7 +688,7 @@ function BikeFitPage() {
             )
           })}
 
-          <div className="bg-bg-tertiary border border-border-subtle rounded-lg p-3 text-[0.7rem] text-text-muted leading-relaxed">
+          <div className="bg-bg-tertiary border border-border-subtle rounded-[var(--radius-sm)] p-3 text-[0.7rem] text-text-muted leading-relaxed">
             Knee tracks max (= BDC, leg most extended). Hip flexion tracks min (= TDC, hip most closed).
             Reset to clear and re-capture. Hip joint is hidden under shorts so the spine→hip estimate carries
             the most error.
@@ -697,7 +697,7 @@ function BikeFitPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <section className="bg-bg-secondary border border-border-subtle rounded-lg p-4 flex flex-col gap-3">
+        <section className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-sm)] p-4 flex flex-col gap-3">
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
             Position summary
           </h2>
@@ -713,7 +713,7 @@ function BikeFitPage() {
                 {items.map((it) => (
                   <li key={it.label} className="flex items-start gap-3">
                     <span
-                      className={`text-[0.65rem] px-2 py-0.5 rounded font-medium shrink-0 ${SUMMARY_BADGE[it.state]}`}
+                      className={`text-[0.65rem] px-2 py-0.5 rounded-[var(--radius-sm)] font-medium shrink-0 ${SUMMARY_BADGE[it.state]}`}
                     >
                       {it.state === 'good' ? 'good' : it.state === 'warn' ? 'check' : '—'}
                     </span>
@@ -728,7 +728,7 @@ function BikeFitPage() {
           })()}
         </section>
 
-        <section className="bg-bg-secondary border border-border-subtle rounded-lg p-4 flex flex-col gap-3">
+        <section className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-sm)] p-4 flex flex-col gap-3">
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
             Recommendations
           </h2>
