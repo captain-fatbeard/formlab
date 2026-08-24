@@ -35,7 +35,7 @@ function FilterPill<T extends string>({
           every other select in the app draws, so the two match exactly. */}
       <span>{display}</span>
       <select
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer bg-bg-tertiary text-text-primary"
         aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
