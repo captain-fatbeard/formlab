@@ -1,4 +1,4 @@
-import { startOfWeek, addWeeks } from 'date-fns'
+import { startOfWeek, addWeeks, format, differenceInCalendarDays } from 'date-fns'
 import { type StravaActivity } from './strava'
 import { zoneColors, formatDateShort } from './chart-theme'
 import { calculateTSS as calculateTSSWithThresholds, isRide, isRun, type TssThresholds } from './tss'
@@ -605,6 +605,16 @@ export function calculateAdvancedMetrics(
 // Weekly training summary
 export interface WeeklySummary {
   week: string
+  /** Monday of the week, ISO `yyyy-MM-dd`. */
+  weekStart: string
+  /**
+   * True for the week still being ridden. Its totals are partial by
+   * definition, so a chart that plots it unmarked shows every current week as
+   * a collapse to zero.
+   */
+  isCurrentWeek: boolean
+  /** How many of the week's seven days have happened, 1–7. */
+  daysElapsed: number
   rides: number
   runs: number
   totalDistance: number
@@ -643,6 +653,9 @@ export function calculateWeeklySummaries(
 
     summaries.push({
       week: formatDateShort(weekStart),
+      weekStart: format(weekStart, 'yyyy-MM-dd'),
+      isCurrentWeek: w === 0,
+      daysElapsed: w === 0 ? differenceInCalendarDays(now, weekStart) + 1 : 7,
       rides: rides.length,
       runs: runs.length,
       totalDistance: Math.round(weekActivities.reduce((sum, a) => sum + a.distance, 0) / 1000),

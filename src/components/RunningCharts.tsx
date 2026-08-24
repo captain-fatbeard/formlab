@@ -17,7 +17,8 @@ import { formatPace } from '~/lib/performance'
 import { chartTheme, tooltipStyle, formatDateShort, activityTooltipLabel } from '~/lib/chart-theme'
 import { isRun } from '~/lib/activities'
 import { calculateTrendLine } from '~/lib/trend'
-import { trendClasses } from '~/lib/styles'
+import { trendClasses, sectionCard, cardTitle } from '~/lib/styles'
+import { InsufficientData, MIN_TREND_POINTS } from './InsufficientData'
 
 interface RunningChartsProps {
   activities: StravaActivity[]
@@ -62,16 +63,18 @@ export function RunningCharts({ activities }: RunningChartsProps) {
 
   if (runs.length === 0) return null
 
-  const hasNoPaceData = paceTrendData.length === 0
-  const hasNoHRData = hrTrendData.length === 0
+  // n = 2 is the problem, not n = 0: two runs drew a flat line across three
+  // days and a wedge, both of which look like faults.
+  const hasPaceTrend = paceTrendData.length >= MIN_TREND_POINTS
+  const hasHRTrend = hrTrendData.length >= MIN_TREND_POINTS
 
   return (
     <div className="flex flex-col gap-8">
       {/* Pace Trend Chart */}
-      <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
+      <div className={sectionCard}>
         <div className="flex justify-between items-center mb-5 max-md:flex-col max-md:items-start max-md:gap-3">
-          <h3 className="text-lg font-semibold text-text-primary">Pace Trend</h3>
-          {paceTrendLine && (
+          <h3 className={cardTitle}>Pace trend</h3>
+          {hasPaceTrend && paceTrendLine && (
             <span className={`text-xs py-1.5 px-3.5 rounded-full font-semibold ${trendClasses[paceTrendLine.trend]}`}>
               {paceTrendLine.trend === 'improving' && '↑ Getting Faster'}
               {paceTrendLine.trend === 'declining' && '↓ Slowing Down'}
@@ -79,8 +82,8 @@ export function RunningCharts({ activities }: RunningChartsProps) {
             </span>
           )}
         </div>
-        {hasNoPaceData ? (
-          <div className="text-text-muted text-center py-16 text-[0.9rem]">No pace data available.</div>
+        {!hasPaceTrend ? (
+          <InsufficientData count={paceTrendData.length} needed={MIN_TREND_POINTS} noun="runs" />
         ) : (
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={paceTrendData}>
@@ -128,9 +131,16 @@ export function RunningCharts({ activities }: RunningChartsProps) {
       </div>
 
       {/* Heart Rate Trend (Runs) */}
-      {!hasNoHRData && (
-        <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-          <h3 className="text-lg font-semibold mb-5 text-text-primary max-[480px]:text-base">Heart Rate Trend (Runs)</h3>
+      {hrTrendData.length > 0 && (
+        <div className={sectionCard}>
+          <h3 className={`${cardTitle} mb-5`}>Heart rate trend (runs)</h3>
+          {!hasHRTrend ? (
+            <InsufficientData
+              count={hrTrendData.length}
+              needed={MIN_TREND_POINTS}
+              noun="runs with heart rate"
+            />
+          ) : (
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={hrTrendData}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} />
@@ -156,6 +166,7 @@ export function RunningCharts({ activities }: RunningChartsProps) {
               />
             </AreaChart>
           </ResponsiveContainer>
+          )}
         </div>
       )}
     </div>

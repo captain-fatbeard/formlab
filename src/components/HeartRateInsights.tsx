@@ -8,12 +8,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
 } from 'recharts'
-import { type StravaActivity, secondsToHMS } from '~/lib/strava'
+import { type StravaActivity } from '~/lib/strava'
 import { getHRZones, getHRZoneForBPM } from '~/lib/performance'
 import {
   chartTheme,
@@ -22,6 +18,9 @@ import {
   formatDateShort,
   activityTooltipLabel,
 } from '~/lib/chart-theme'
+import { ZoneDistribution, type ZoneRow } from './ZoneDistribution'
+import { sectionCard, cardTitle } from '~/lib/styles'
+import { formatNumber } from '~/lib/format'
 
 interface HeartRateInsightsProps {
   activities: StravaActivity[]
@@ -54,10 +53,19 @@ function getTrend(data: (number | null)[]): 'Improving' | 'Stable' | 'Declining'
   return 'Stable'
 }
 
+// A rising average heart rate at the same effort is worth noticing, not worth
+// alarming about — it is exactly what a recovery block or a hot week looks
+// like. Red is reserved for things that are actually wrong.
 const trendBadgeClass: Record<string, string> = {
   Improving: 'bg-success-muted text-success',
   Stable: 'bg-bg-tertiary text-text-secondary',
-  Declining: 'bg-danger-muted text-danger',
+  Declining: 'bg-warning-muted text-warning',
+}
+
+const trendExplanation: Record<string, string> = {
+  Improving: 'Average heart rate is trending down across recent activities.',
+  Stable: 'Average heart rate is holding steady across recent activities.',
+  Declining: 'Average heart rate is trending up across recent activities.',
 }
 
 export function HeartRateInsights({ activities, maxHR, restingHR }: HeartRateInsightsProps) {
@@ -88,7 +96,9 @@ export function HeartRateInsights({ activities, maxHR, restingHR }: HeartRateIns
   )
 
   // --- HR Zone Distribution Data ---
-  const zoneDistribution = useMemo(() => {
+  // Every zone in Z1→Z5 order, zeros included: `-` for an untouched zone read
+  // as "unknown" rather than "none".
+  const zoneRows = useMemo<ZoneRow[]>(() => {
     if (!maxHR || !restingHR) return []
 
     const zones = getHRZones(maxHR, restingHR)
@@ -99,36 +109,28 @@ export function HeartRateInsights({ activities, maxHR, restingHR }: HeartRateIns
       .filter((a) => a.average_heartrate)
       .forEach((a) => {
         const zone = getHRZoneForBPM(a.average_heartrate!, maxHR, restingHR)
-        if (zone) {
-          zoneTime[zone.name] += a.moving_time
-        }
+        if (zone) zoneTime[zone.name] += a.moving_time
       })
 
     const totalTime = Object.values(zoneTime).reduce((sum, t) => sum + t, 0)
-    if (totalTime === 0) return []
 
-    return zones.map((z, i) => ({
-      name: z.name.replace(/Zone \d+ \(/, '').replace(')', ''),
-      fullName: z.name,
-      time: zoneTime[z.name],
-      percentage: Math.round((zoneTime[z.name] / totalTime) * 100),
+    return zones.map((zone, i) => ({
+      key: `Z${i + 1}`,
+      name: zone.name.replace(/Zone \d+ \(/, '').replace(')', ''),
+      range: `${formatNumber(zone.min)}–${formatNumber(zone.max)} bpm`,
+      seconds: zoneTime[zone.name],
+      percentage: totalTime > 0 ? Math.round((zoneTime[zone.name] / totalTime) * 100) : 0,
       color: hrZoneColors[i],
-      bpmRange: `${z.min}-${z.max}`,
-    })).filter((z) => z.time > 0)
+    }))
   }, [activities, maxHR, restingHR])
 
-  const hrZones = useMemo(
-    () => (maxHR && restingHR ? getHRZones(maxHR, restingHR) : []),
-    [maxHR, restingHR]
-  )
-
   const hasHRData = hrTrendData.length > 0
-  const hasZoneData = zoneDistribution.length > 0
+  const hasZoneData = zoneRows.some((z) => z.seconds > 0)
 
   if (!hasHRData && !hasZoneData) {
     return (
-      <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-        <h3 className="text-lg font-semibold mb-5 text-text-primary max-[480px]:text-base">Heart Rate Insights</h3>
+      <div className={sectionCard}>
+        <h3 className={`${cardTitle} mb-5`}>Heart rate insights</h3>
         <div className="text-text-muted text-center py-16 text-[0.9rem]">
           No heart rate data available. Use a heart rate monitor during activities to see insights here.
         </div>
@@ -140,10 +142,13 @@ export function HeartRateInsights({ activities, maxHR, restingHR }: HeartRateIns
     <div className="flex flex-col gap-8">
       {/* Heart Rate Trends */}
       {hasHRData && (
-        <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-          <div className="flex justify-between items-center mb-5 max-md:flex-col max-md:items-start max-md:gap-3">
-            <h3 className="text-lg font-semibold text-text-primary max-[480px]:text-base">Heart Rate Trends</h3>
-            <span className={`py-1.5 px-4 rounded-full text-sm font-semibold ${trendBadgeClass[trend]}`}>
+        <div className={sectionCard}>
+          <div className="flex justify-between items-start mb-5 gap-3 max-md:flex-col max-md:items-start">
+            <div>
+              <h3 className={cardTitle}>Heart rate trends</h3>
+              <p className="text-[0.8125rem] text-text-muted mt-1">{trendExplanation[trend]}</p>
+            </div>
+            <span className={`py-1.5 px-4 rounded-full text-[0.8125rem] font-semibold shrink-0 ${trendBadgeClass[trend]}`}>
               {trend}
             </span>
           </div>
@@ -204,76 +209,9 @@ export function HeartRateInsights({ activities, maxHR, restingHR }: HeartRateIns
 
       {/* HR Zone Distribution */}
       {hasZoneData && (
-        <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-          <h3 className="text-lg font-semibold mb-5 text-text-primary max-[480px]:text-base">HR Zone Distribution</h3>
-          <div className="grid grid-cols-2 gap-8 items-start max-md:grid-cols-1">
-            <div>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={zoneDistribution}
-                    dataKey="time"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    innerRadius={50}
-                    paddingAngle={2}
-                    label={({ name, percentage }) =>
-                      percentage > 5 ? `${percentage}%` : ''
-                    }
-                    labelLine={false}
-                  >
-                    {zoneDistribution.map((entry, index) => (
-                      <Cell key={index} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    {...tooltipStyle}
-                    formatter={(value: number) => [secondsToHMS(value), 'Time']}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr>
-                    <th className="text-left p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">Zone</th>
-                    <th className="text-left p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">BPM</th>
-                    <th className="text-left p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">Time</th>
-                    <th className="text-right p-3 text-text-muted font-semibold text-[0.7rem] uppercase tracking-wide border-b border-border">%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {hrZones.map((zone, i) => {
-                    const data = zoneDistribution.find((d) => d.fullName === zone.name)
-                    return (
-                      <tr key={zone.name}>
-                        <td className="p-3 border-b border-border-subtle">
-                          <span
-                            className="inline-block size-3 rounded-full mr-2"
-                            style={{ backgroundColor: hrZoneColors[i] }}
-                          />
-                          {zone.name.replace(/Zone \d+ \(/, '').replace(')', '')}
-                        </td>
-                        <td className="p-3 border-b border-border-subtle text-text-secondary">
-                          {zone.min}-{zone.max}
-                        </td>
-                        <td className="p-3 border-b border-border-subtle text-text-primary">
-                          {data ? secondsToHMS(data.time) : '-'}
-                        </td>
-                        <td className="p-3 border-b border-border-subtle text-right text-text-primary font-medium">
-                          {data ? `${data.percentage}%` : '-'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div className={sectionCard}>
+          <h3 className={`${cardTitle} mb-5`}>HR zone distribution</h3>
+          <ZoneDistribution zones={zoneRows} rangeHeader="Heart rate" label="Time in heart-rate zones" />
         </div>
       )}
     </div>

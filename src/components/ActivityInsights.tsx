@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import {
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -12,7 +13,8 @@ import { startOfWeek, addWeeks } from 'date-fns'
 import { type StravaActivity } from '~/lib/strava'
 import { estimateCaloriesBurned } from '~/lib/performance'
 import { chartTheme, tooltipStyle, formatDateShort } from '~/lib/chart-theme'
-import { statCard, statCardAccent, statValue, statValueAccent } from '~/lib/styles'
+import { statCard, statCardAccent, statValue, statValueAccent, sectionCard, cardTitle } from '~/lib/styles'
+import { formatNumber } from '~/lib/format'
 
 interface ActivityInsightsProps {
   activities: StravaActivity[]
@@ -25,6 +27,10 @@ interface ActivityInsightsProps {
 interface WeeklyCalorieData {
   week: string
   calories: number
+  /** The week still being ridden — partial by definition, so it is drawn as
+   *  unfinished rather than as a collapse at the right edge of the chart. */
+  isCurrentWeek: boolean
+  daysElapsed: number
 }
 
 export function ActivityInsights({
@@ -63,12 +69,18 @@ export function ActivityInsights({
         return sum + Math.round((a.moving_time / 60) * 5)
       }, 0)
 
-      data.push({ week: formatDateShort(ws), calories })
+      data.push({
+        week: formatDateShort(ws),
+        calories,
+        isCurrentWeek: w === 0,
+        daysElapsed: w === 0 ? Math.floor((now.getTime() - ws.getTime()) / 86_400_000) + 1 : 7,
+      })
     }
 
     data.reverse()
     const total = data.reduce((s, d) => s + d.calories, 0)
-    const weeksWithActivity = data.filter((d) => d.calories > 0).length
+    // Completed weeks only — a two-day-old week drags the average down.
+    const weeksWithActivity = data.filter((d) => d.calories > 0 && !d.isCurrentWeek).length
     const avg = weeksWithActivity > 0 ? Math.round(total / weeksWithActivity) : 0
 
     return { weeklyCalories: data, totalCalories: total, weeklyAvgCalories: avg }
@@ -78,8 +90,8 @@ export function ActivityInsights({
 
   if (!hasCalorieData) {
     return (
-      <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-        <h3 className="text-lg font-semibold mb-5 text-text-primary max-[480px]:text-base">Activity Insights</h3>
+      <div className={sectionCard}>
+        <h3 className={`${cardTitle} mb-5`}>Activity insights</h3>
         <div className="text-text-muted text-center py-16 text-[0.9rem]">
           No activity data available for this time range.
         </div>
@@ -88,18 +100,19 @@ export function ActivityInsights({
   }
 
   return (
-    <div className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 transition-all duration-200 hover:border-border max-md:p-4 max-[480px]:p-3.5">
-      <h3 className="text-lg font-semibold mb-5 text-text-primary max-[480px]:text-base">Weekly Calorie Burn</h3>
+    <div className={sectionCard}>
+      <h3 className={`${cardTitle} mb-5`}>Weekly calorie burn</h3>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-6">
         <div className={`${statCardAccent} text-center gap-1`}>
           <div className={statValueAccent}>
-            {totalCalories.toLocaleString()}
+            {formatNumber(totalCalories)}
           </div>
-          <div className="text-sm text-text-secondary font-medium">Period Total</div>
+          <div className="text-sm text-text-secondary font-medium">Period total</div>
         </div>
         <div className={`${statCard} text-center gap-1`}>
-          <div className={statValue}>{weeklyAvgCalories.toLocaleString()}</div>
-          <div className="text-sm text-text-secondary font-medium">Weekly Avg</div>
+          <div className={statValue}>{formatNumber(weeklyAvgCalories)}</div>
+          <div className="text-sm text-text-secondary font-medium">Weekly average</div>
+          <div className="text-[0.75rem] text-text-muted">completed weeks only</div>
         </div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
@@ -113,16 +126,31 @@ export function ActivityInsights({
           />
           <Tooltip
             {...tooltipStyle}
-            formatter={(value: number) => [`${value.toLocaleString()} cal`, 'Calories']}
+            cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+            labelFormatter={(label: string) => {
+              const week = weeklyCalories.find((w) => w.week === label)
+              return week?.isCurrentWeek
+                ? `Week of ${label} — in progress, day ${week.daysElapsed} of 7`
+                : `Week of ${label}`
+            }}
+            formatter={(value: number) => [`${formatNumber(value)} cal`, 'Calories']}
           />
-          <Bar
-            dataKey="calories"
-            fill={chartTheme.colors.primary.main}
-            radius={[4, 4, 0, 0]}
-            name="Calories"
-          />
+          <Bar dataKey="calories" radius={[4, 4, 0, 0]} name="Calories">
+            {weeklyCalories.map((week) => (
+              <Cell
+                key={week.week}
+                fill={chartTheme.colors.primary.main}
+                fillOpacity={week.isCurrentWeek ? 0.35 : 1}
+                stroke={week.isCurrentWeek ? chartTheme.colors.primary.main : undefined}
+                strokeDasharray={week.isCurrentWeek ? '3 3' : undefined}
+              />
+            ))}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
+      <p className="text-[0.75rem] text-text-muted mt-2">
+        The dashed bar is this week, still in progress.
+      </p>
     </div>
   )
 }
