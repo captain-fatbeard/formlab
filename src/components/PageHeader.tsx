@@ -18,9 +18,16 @@ interface PageHeaderProps {
   scope?: 'global' | 'lifetime' | 'none'
   /** Number of activities behind the page, shown at the end of the scope line. */
   count?: number
+  /** Plural noun for the count; the singular is derived, `-ies` included. */
   countNoun?: string
   /** Page-level controls, right-aligned against the title. */
   actions?: ReactNode
+}
+
+/** `activities` → `activity`, `rides` → `ride`. */
+function singular(noun: string): string {
+  if (noun.endsWith('ies')) return `${noun.slice(0, -3)}y`
+  return noun.replace(/s$/, '')
 }
 
 export function PageHeader({
@@ -40,7 +47,7 @@ export function PageHeader({
     parts.push('All time', 'All activities')
   }
   if (count != null) {
-    parts.push(`${formatNumber(count)} ${count === 1 ? countNoun.replace(/s$/, '') : countNoun}`)
+    parts.push(`${formatNumber(count)} ${count === 1 ? singular(countNoun) : countNoun}`)
   }
 
   return (
