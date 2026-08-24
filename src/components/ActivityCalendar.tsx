@@ -297,7 +297,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
                       <div
                         key={`${wi}-${di}`}
                         aria-hidden="true"
-                        className="aspect-square w-full rounded-[3px] opacity-25"
+                        className="aspect-square w-full rounded-[2px] opacity-25"
                         style={{ backgroundColor: LEVEL_FILL[0] }}
                       />
                     )
@@ -314,7 +314,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
                       onBlur={() => setHovered(null)}
                       onClick={() => setPinned((p) => (p?.date === day.date ? null : day))}
                       aria-label={`${day.date}: ${day.count} ${day.count === 1 ? 'activity' : 'activities'}, ${formatHours(day.movingTime)}, ${Math.round(day.load)} load`}
-                      className="aspect-square w-full rounded-[3px] transition-transform hover:scale-110 focus:scale-110 focus:outline-none"
+                      className="aspect-square w-full rounded-[2px] transition-transform hover:scale-110 focus:scale-110 focus:outline-none"
                       style={{
                         backgroundColor: LEVEL_FILL[day.level],
                         // 2px surface ring on the hovered mark, per mark specs
@@ -338,7 +338,7 @@ export function ActivityCalendar({ activities }: ActivityCalendarProps) {
       <div className="flex items-center gap-x-4 gap-y-1 mt-2 flex-wrap">
         {LEVEL_FILL.map((fill, i) => (
           <span key={i} className="flex items-center gap-1.5">
-            <span className="size-3 rounded-[3px] shrink-0" style={{ backgroundColor: fill }} />
+            <span className="size-3 rounded-[2px] shrink-0" style={{ backgroundColor: fill }} />
             <span className="text-[0.75rem] text-text-muted">{LEVEL_LABELS[i]}</span>
           </span>
         ))}

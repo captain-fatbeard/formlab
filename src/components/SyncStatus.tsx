@@ -36,7 +36,7 @@ export function SyncStatus({ lastSyncedAt, isSyncing, onSync }: SyncStatusProps)
       onClick={onSync}
       disabled={isSyncing}
       title="Sync new activities from intervals.icu"
-      className="flex items-center gap-1.5 h-8 px-3 rounded-full text-[0.75rem] font-medium text-text-muted border border-transparent cursor-pointer transition-colors duration-150 hover:text-text-secondary hover:border-border disabled:cursor-progress max-md:hidden"
+      className="flex items-center gap-1.5 h-8 px-3 rounded-[var(--radius-sm)] text-[0.75rem] font-medium text-text-muted border border-transparent cursor-pointer transition-colors duration-150 hover:text-text-secondary hover:border-border disabled:cursor-progress max-md:hidden"
     >
       <svg
         width="13"

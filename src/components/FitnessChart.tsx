@@ -97,24 +97,24 @@ export function FitnessChart({ activities }: FitnessChartProps) {
           <span className="flex flex-col items-center">
             <span className="text-[0.75rem] text-text-muted uppercase font-semibold tracking-wider"><MetricTerm id="ctl">CTL</MetricTerm></span>
             <span className="data-value text-2xl font-medium" style={{ color: chartTheme.colors.primary.main }}>{latestData.ctl.toFixed(1)}</span>
-            <span className="text-[0.75rem] font-medium mt-0.5 rounded-full px-2 py-0.5" style={{ color: ctlLevel.color, backgroundColor: `${ctlLevel.color}15` }}>{ctlLevel.label}</span>
+            <span className="text-[0.75rem] font-medium mt-0.5 rounded-[var(--radius-sm)] px-2 py-0.5" style={{ color: ctlLevel.color, backgroundColor: `${ctlLevel.color}15` }}>{ctlLevel.label}</span>
           </span>
           <span className="flex flex-col items-center">
             <span className="text-[0.75rem] text-text-muted uppercase font-semibold tracking-wider"><MetricTerm id="atl">ATL</MetricTerm></span>
             <span className="data-value text-2xl font-medium" style={{ color: chartTheme.colors.secondary.main }}>{latestData.atl.toFixed(1)}</span>
-            <span className="text-[0.75rem] font-medium mt-0.5 rounded-full px-2 py-0.5" style={{ color: atlLevel.color, backgroundColor: `${atlLevel.color}15` }}>{atlLevel.label}</span>
+            <span className="text-[0.75rem] font-medium mt-0.5 rounded-[var(--radius-sm)] px-2 py-0.5" style={{ color: atlLevel.color, backgroundColor: `${atlLevel.color}15` }}>{atlLevel.label}</span>
           </span>
           <span className="flex flex-col items-center">
             <span className="text-[0.75rem] text-text-muted uppercase font-semibold tracking-wider"><MetricTerm id="tsb">Form</MetricTerm></span>
             <span className="data-value text-2xl font-medium" style={{ color: formStatus.color }}>
               {latestData.tsb.toFixed(1)}
             </span>
-            <span className="text-[0.75rem] font-medium mt-0.5 rounded-full px-2 py-0.5" style={{ color: formStatus.color, backgroundColor: `${formStatus.color}15` }}>{formStatus.label}</span>
+            <span className="text-[0.75rem] font-medium mt-0.5 rounded-[var(--radius-sm)] px-2 py-0.5" style={{ color: formStatus.color, backgroundColor: `${formStatus.color}15` }}>{formStatus.label}</span>
           </span>
           <span className="flex flex-col items-center">
             <span className="text-[0.75rem] text-text-muted uppercase font-semibold tracking-wider"><MetricTerm id="ftp">FTP</MetricTerm></span>
             <span className="data-value text-2xl font-medium text-text-primary">{latestData.ftp}W</span>
-            <span className="text-[0.75rem] font-medium mt-0.5 rounded-full px-2 py-0.5 text-text-muted bg-bg-tertiary">Estimated</span>
+            <span className="text-[0.75rem] font-medium mt-0.5 rounded-[var(--radius-sm)] px-2 py-0.5 text-text-muted bg-bg-tertiary">Estimated</span>
           </span>
         </div>
       </div>
@@ -280,7 +280,7 @@ function CTLTargets({ currentCtl }: { currentCtl: number }) {
                   {t.ctl}
                   {isCurrent && (
                     <span
-                      className="ml-2 text-[0.75rem] font-medium rounded-full px-2 py-0.5"
+                      className="ml-2 text-[0.75rem] font-medium rounded-[var(--radius-sm)] px-2 py-0.5"
                       style={{ color: chartTheme.colors.primary.main, backgroundColor: `${chartTheme.colors.primary.main}15` }}
                     >
                       next

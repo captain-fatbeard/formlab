@@ -53,7 +53,7 @@ export function PowerZonesChart({ activities }: PowerZonesChartProps) {
     <div className={sectionCard}>
       <div className="flex justify-between items-center mb-5 gap-3 max-md:flex-col max-md:items-start">
         <h3 className={cardTitle}>Power zones</h3>
-        <span className="bg-accent/15 border border-accent/30 text-accent py-1 px-3.5 rounded-full text-[0.8125rem] font-semibold data-value">
+        <span className="bg-accent/15 border border-accent/30 text-accent py-1 px-3.5 rounded-[var(--radius-sm)] text-[0.8125rem] font-semibold data-value">
           <MetricTerm id="ftp">FTP</MetricTerm> {formatNumber(ftp)} W
         </span>
       </div>

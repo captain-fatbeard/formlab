@@ -227,7 +227,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 function Code({ children }: { children: React.ReactNode }) {
   return (
-    <code className="font-mono text-[0.8em] text-accent-light bg-bg-tertiary border border-border-subtle rounded px-1.5 py-0.5">
+    <code className="font-mono text-[0.8em] text-accent-light bg-bg-tertiary border border-border-subtle rounded-[var(--radius-sm)] px-1.5 py-0.5">
       {children}
     </code>
   )
@@ -387,7 +387,7 @@ function DocsPage() {
         <ol className="flex flex-col gap-5">
           {syncSteps.map((step, i) => (
             <li key={step.title} className="flex gap-4">
-              <span className="shrink-0 size-7 rounded-full bg-accent/15 border border-accent/30 text-accent text-xs font-semibold flex items-center justify-center mt-0.5">
+              <span className="shrink-0 size-7 rounded-[var(--radius-sm)] bg-accent/15 border border-accent/30 text-accent text-xs font-semibold flex items-center justify-center mt-0.5">
                 {i + 1}
               </span>
               <div>

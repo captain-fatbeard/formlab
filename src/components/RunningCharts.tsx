@@ -75,7 +75,7 @@ export function RunningCharts({ activities }: RunningChartsProps) {
         <div className="flex justify-between items-center mb-5 max-md:flex-col max-md:items-start max-md:gap-3">
           <h3 className={cardTitle}>Pace trend</h3>
           {hasPaceTrend && paceTrendLine && (
-            <span className={`text-xs py-1.5 px-3.5 rounded-full font-semibold ${trendClasses[paceTrendLine.trend]}`}>
+            <span className={`text-xs py-1.5 px-3.5 rounded-[var(--radius-sm)] font-semibold ${trendClasses[paceTrendLine.trend]}`}>
               {paceTrendLine.trend === 'improving' && '↑ Getting Faster'}
               {paceTrendLine.trend === 'declining' && '↓ Slowing Down'}
               {paceTrendLine.trend === 'stable' && '→ Stable'}

@@ -699,7 +699,7 @@ function DashboardLayout() {
 
               {/* Avatar — opens settings */}
               <button
-                className="size-8 rounded-full bg-accent/15 border border-accent/30 text-accent text-[0.75rem] font-semibold flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-accent/25 hover:border-accent/50 max-md:hidden"
+                className="size-8 rounded-[var(--radius-sm)] bg-accent/15 border border-accent/30 text-accent text-[0.75rem] font-semibold flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-accent/25 hover:border-accent/50 max-md:hidden"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 title={`${athlete.firstname} ${athlete.lastname} — settings`}
                 aria-haspopup="dialog"
@@ -958,9 +958,9 @@ function DashboardLayout() {
               </button>
               {syncProgress && (
                 <div className="mt-2">
-                  <div className="w-full h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-bg-tertiary rounded-[var(--radius-sm)] overflow-hidden">
                     <div
-                      className="h-full bg-accent rounded-full transition-all duration-300"
+                      className="h-full bg-accent rounded-[var(--radius-sm)] transition-all duration-300"
                       style={{ width: `${Math.round((syncProgress.current / syncProgress.total) * 100)}%` }}
                     />
                   </div>

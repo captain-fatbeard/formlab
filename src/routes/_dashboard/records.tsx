@@ -222,7 +222,7 @@ function AchievementBadge({ type, rank }: { type: string; rank: number }) {
     : 'bg-teal-500/20 text-teal-400 border-teal-500/30'
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[0.75rem] font-bold uppercase tracking-wider rounded-full border ${colorClass}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[0.75rem] font-bold uppercase tracking-wider rounded-[var(--radius-sm)] border ${colorClass}`}>
       {isKom && rank === 1 && (
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
           <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
@@ -449,7 +449,7 @@ function RecordsPage() {
                     Best {label} power
                     {estimated && (
                       <span
-                        className="text-[0.75rem] normal-case tracking-normal font-medium text-text-muted bg-bg-tertiary rounded-full px-2 py-0.5"
+                        className="text-[0.75rem] normal-case tracking-normal font-medium text-text-muted bg-bg-tertiary rounded-[var(--radius-sm)] px-2 py-0.5"
                         title="Estimated from whole-ride average power. Sync All Activities to compute true peaks from power streams."
                       >
                         est.
@@ -464,7 +464,7 @@ function RecordsPage() {
                         params={{ activityId: String(activity.id) }}
                         className="flex items-center gap-3 no-underline group"
                       >
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                        <div className={`w-6 h-6 rounded-[var(--radius-sm)] flex items-center justify-center text-xs font-bold shrink-0 ${
                           i === 0
                             ? 'bg-amber-500/20 text-amber-400'
                             : i === 1
@@ -482,7 +482,7 @@ function RecordsPage() {
                             return (
                               <div className="flex items-center gap-1.5 min-w-0">
                                 {prefix && (
-                                  <span className="text-[0.75rem] font-semibold text-ride bg-ride-muted rounded px-1.5 py-0.5 shrink-0">
+                                  <span className="text-[0.75rem] font-semibold text-ride bg-ride-muted rounded-[var(--radius-sm)] px-1.5 py-0.5 shrink-0">
                                     {prefix}
                                   </span>
                                 )}
@@ -706,7 +706,7 @@ function RecordsPage() {
                           <AchievementBadge key={i} type={a.type} rank={a.rank} />
                         ))}
                         {seg.climbCategory > 0 && (
-                          <span className="text-[0.75rem] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">
+                          <span className="text-[0.75rem] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded-[var(--radius-sm)]">
                             {climbCategoryLabel(seg.climbCategory)}
                           </span>
                         )}

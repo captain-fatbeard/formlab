@@ -25,9 +25,9 @@ export function ComparisonBar({ value, benchmark, goodThreshold, unit, label }: 
           {isAbove ? '+' : ''}{diffPercent}%
         </span>
       </div>
-      <div className="relative h-2 bg-bg-secondary rounded-full overflow-hidden">
+      <div className="relative h-2 bg-bg-secondary rounded-[var(--radius-sm)] overflow-hidden">
         <div
-          className="absolute top-0 left-0 h-full rounded-full bg-accent/80"
+          className="absolute top-0 left-0 h-full rounded-[var(--radius-sm)] bg-accent/80"
           style={{ width: `${valuePos}%` }}
         />
         <div

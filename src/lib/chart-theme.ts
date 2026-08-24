@@ -148,7 +148,7 @@ export const tooltipStyle = {
   contentStyle: {
     backgroundColor: chartTheme.tooltip.background,
     border: `1px solid ${chartTheme.tooltip.border}`,
-    borderRadius: '10px',
+    borderRadius: '2px',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255,255,255,0.03)',
     padding: '12px 16px',
     fontFamily: "'Lexend Deca', system-ui, sans-serif",

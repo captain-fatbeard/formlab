@@ -52,7 +52,7 @@ export function RangeSelector({
           type="button"
           onClick={onReset}
           title="Follow the time range in the top bar"
-          className="flex items-center gap-1 text-[0.75rem] font-medium text-warning bg-warning-muted border border-warning/30 rounded-full px-2.5 py-0.5 cursor-pointer transition-colors hover:bg-warning/20"
+          className="flex items-center gap-1 text-[0.75rem] font-medium text-warning bg-warning-muted border border-warning/30 rounded-[var(--radius-sm)] px-2.5 py-0.5 cursor-pointer transition-colors hover:bg-warning/20"
         >
           Overriding global
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">

@@ -148,7 +148,7 @@ export function HeartRateInsights({ activities, maxHR, restingHR }: HeartRateIns
               <h3 className={cardTitle}>Heart rate trends</h3>
               <p className="text-[0.8125rem] text-text-muted mt-1">{trendExplanation[trend]}</p>
             </div>
-            <span className={`py-1.5 px-4 rounded-full text-[0.8125rem] font-semibold shrink-0 ${trendBadgeClass[trend]}`}>
+            <span className={`py-1.5 px-4 rounded-[var(--radius-sm)] text-[0.8125rem] font-semibold shrink-0 ${trendBadgeClass[trend]}`}>
               {trend}
             </span>
           </div>
