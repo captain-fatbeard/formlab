@@ -38,6 +38,7 @@ import {
   deleteActivityGroup,
   updateActivityGroupName,
 } from '~/lib/storage/supabase-client'
+import { buttonPrimary } from '~/lib/styles'
 
 export const Route = createFileRoute('/_dashboard')({
   component: DashboardLayout,
@@ -562,7 +563,7 @@ function DashboardLayout() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-6 p-8 text-center hero-gradient">
         <p className="text-danger bg-danger-muted px-6 py-4 rounded-[var(--radius-md)] border border-red-500/20 text-sm">{error || 'Not authenticated'}</p>
-        <Link to="/" className="bg-linear-to-br from-accent to-accent-dark text-white border border-accent/30 py-3 px-7 text-[0.875rem] font-semibold rounded-[var(--radius-md)] cursor-pointer no-underline transition-all duration-200 shadow-[0_4px_16px_rgba(20,184,166,0.25)] hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(20,184,166,0.35)]">Back to Login</Link>
+        <Link to="/" className={buttonPrimary}>Back to Login</Link>
       </div>
     )
   }
@@ -698,7 +699,7 @@ function DashboardLayout() {
 
               {/* Avatar — opens settings */}
               <button
-                className="size-8 rounded-full bg-accent/15 border border-accent/30 text-accent text-[0.6875rem] font-semibold flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-accent/25 hover:border-accent/50 max-md:hidden"
+                className="size-8 rounded-full bg-accent/15 border border-accent/30 text-accent text-[0.75rem] font-semibold flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-accent/25 hover:border-accent/50 max-md:hidden"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 title={`${athlete.firstname} ${athlete.lastname} — settings`}
                 aria-haspopup="dialog"

@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { sectionHeading } from '~/lib/styles'
 
 export const Route = createFileRoute('/_dashboard/docs')({
   head: () => ({ meta: [{ title: 'How FormLab works · FormLab' }] }),
@@ -218,7 +219,7 @@ function DataFlowDiagram() {
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="bg-bg-secondary border border-border-subtle rounded-[var(--radius-lg)] p-7 max-md:p-4 max-[480px]:p-3.5">
-      <h2 className="text-lg font-semibold text-text-primary mb-4">{title}</h2>
+      <h2 className={`${sectionHeading} mb-4`}>{title}</h2>
       {children}
     </section>
   )
@@ -405,9 +406,9 @@ function DocsPage() {
           <table className="w-full min-w-[560px] border-collapse text-left">
             <thead>
               <tr className="border-b border-border-subtle">
-                <th className="py-2 pr-4 text-[0.7rem] uppercase tracking-wider font-semibold text-text-muted">Table</th>
-                <th className="py-2 pr-4 text-[0.7rem] uppercase tracking-wider font-semibold text-text-muted">Purpose</th>
-                <th className="py-2 text-[0.7rem] uppercase tracking-wider font-semibold text-text-muted">Written by</th>
+                <th className="py-2 pr-4 text-[0.75rem] uppercase tracking-wider font-semibold text-text-muted">Table</th>
+                <th className="py-2 pr-4 text-[0.75rem] uppercase tracking-wider font-semibold text-text-muted">Purpose</th>
+                <th className="py-2 text-[0.75rem] uppercase tracking-wider font-semibold text-text-muted">Written by</th>
               </tr>
             </thead>
             <tbody>
